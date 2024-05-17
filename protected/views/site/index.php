@@ -95,8 +95,8 @@ You have no projects assigned.
 						),
 					));
 			?>
-			<li>Processing project stats: 
-			<ul><li>
+			<li>Processing project stats: 			</li>
+
 			
 			</li>
 			</ul>
