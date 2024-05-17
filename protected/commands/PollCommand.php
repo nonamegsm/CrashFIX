@@ -84,43 +84,61 @@ class PollCommand extends CConsoleCommand
 		$criteria=new CDbCriteria;
 		$criteria->select='*';  
 		$criteria->condition='status='.DebugInfo::STATUS_PENDING_PROCESSING;		
-		$criteria->limit=10;
+		$criteria->limit=100;
 		$debugInfoFiles = DebugInfo::model()->findAll($criteria);
 		if($debugInfoFiles==Null)		
 			Yii::log('There are no debug info files ready for import', 'info');		
 		else 
 			Yii::log('Found '.count($debugInfoFiles).' debug info files ready for import', 'info');		
 			
-		foreach($debugInfoFiles as $debugInfo)
-		{	
-			// Format command parameters
-			$fileName = $debugInfo->getLocalFilePath();
-			$symDir = Yii::app()->getBasePath()."/data/debugInfo";
-			$outFile = tempnam(Yii::app()->getRuntimePath(), "aop");				
-			
-			// Format command
-			$command = 'assync dumper --import-pdb "'.$fileName.'" "'.$symDir.'" "'.$outFile.'"';
-				
-			// Execute the command
-			$responce = "";
-			$retCode = Yii::app()->daemon->execCommand($command, $responce);
-				
-			if($retCode!=0)
-			{
-				Yii::log('Error executing command '.$command.', responce = '.$responce, 'error');
-				continue;
-			}
-			
-			// Check responce and get command ID from server responce
-			$matches = array();
-			$check = preg_match(
-					'#Assync command \{([0-9]{1,6}.[0-9]{1,9})\} has been added to the request queue.#', 
-					$responce, $matches);			
-			if(!$check || !isset($matches[1]))
-			{
-				Yii::log('Unexpected responce from command '.$command.', responce = '.$responce, 'error');
-				continue;
-			}			
+foreach ($crashReportFiles as $crashReport) {
+    // Determine path to crash report file
+    $fileName = $crashReport->getLocalFilePath();
+    // Create a temporary file for outputting results
+    $outFile = tempnam(Yii::app()->getRuntimePath(), "aop");
+
+    // Format daemon command
+    $command = 'assync dumper --dump-crash-report "' . $fileName . '" "' . $outFile . '"';
+
+    // Check if project allows to load PDB files without checking for matching build age
+    if (isset($crashReport->project) && $crashReport->project->require_exact_build_age == false) {
+        $command .= ' --relax-build-age';
+    }
+
+    // Execute the command
+    $response = "";
+    $retCode = Yii::app()->daemon->execCommand($command, $response);
+
+    // Log the response for debugging
+    Yii::log('Command executed: ' . $command . ', Response: ' . $response, 'info');
+
+    if ($retCode != 0) {
+        Yii::log('Error executing command ' . $command . ', response = ' . $response, 'error');
+        continue;
+    }
+
+    // Check response and get command ID from server response
+    $matches = array();
+    $check = preg_match(
+        '#Assync command\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}\s*has\s*been\s*added\s*to\s*the\s*request\s*queue\.\s*#',
+        $response,
+        $matches
+    );
+
+    // Log the regex check result for debugging
+    Yii::log('Regex check: ' . ($check ? 'Match found' : 'No match found'), 'info');
+    if ($check) {
+        Yii::log('Matched command ID: ' . $matches[1], 'info');
+    } else {
+        Yii::log('Regex pattern failed to match. Response was: ' . $response, 'error');
+    }
+
+    if (!$check || !isset($matches[1])) {
+        Yii::log('Unexpected response from command ' . $command . ', response = ' . $response, 'error');
+        continue;
+    }
+
+	
 			
 			// Begin DB transaction
 			$transaction = Yii::app()->db->beginTransaction();
@@ -333,7 +351,7 @@ class PollCommand extends CConsoleCommand
 		$criteria=new CDbCriteria;
 		$criteria->select='*';  
 		$criteria->condition='status='.CrashReport::STATUS_PENDING_PROCESSING;		
-		$criteria->limit=10;
+		$criteria->limit=100;
 		$crashReportFiles = CrashReport::model()->findAll($criteria);
 		if($crashReportFiles==Null)		
 		{
@@ -377,7 +395,7 @@ class PollCommand extends CConsoleCommand
 			// Check response and get command ID from server responce
 			$matches = array();
 			$check = preg_match(
-					'#Assync command \{([0-9]{1,6}.[0-9]{1,9})\} has been added to the request queue.#', 
+        			'#Assync command\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}\s*has\s*been\s*added\s*to\s*the\s*request\s*queue\.\s*#',
 					$responce, $matches);			
 			if(!$check || !isset($matches[1]))
 			{
@@ -532,61 +550,61 @@ class PollCommand extends CConsoleCommand
 	 * This method checks if an assync daemon command has finished.
 	 * @param type $cmdId 
 	 */
-	public function checkAssyncCommand($cmdId, &$cmdRetCode, &$cmdRetMsg)
-	{
-		// Format command to daemon
-		$command = 'daemon get-assync-info -erase-completed '.$cmdId;				
-			
-		// Execute the command
-		$responce = "";
-		$retCode = Yii::app()->daemon->execCommand($command, $responce);
-		
-		// Add a message to log
-		Yii::log('Command returned: '.$responce, 'info');
-		
-		// Check responce
-		if(preg_match('/still executing/', $responce))
-		{
-			// This operation is still executing
-			// TODO: check time of execution to notify about frozen operations
-			Yii::log(
-					'The operation'.$cmdId.' is still in progress', 
-					'info');
-			
-			return self::CAC_STILL_RUNNING;
-		}
-		
-		// Get command ID and command's return message.
-		$matches = array();
-		$check = preg_match(
-				'#Command \{([0-9]{1,6}.[0-9]{1,9})\} returned \{(.+)\}#', 
-				$responce, $matches);				
-		if(!$check || count($matches)!=3)
-		{
-			Yii::log(
-				'Unexpected response from command '.$command.', response = '.$responce, 
-				'error');
-			
-            $cmdRetMsg = 'CrashFix service has encountered an unexpected internal error during processing this file.';
-            
-			return self::CAC_ERROR;
-		}				
+public function checkAssyncCommand($cmdId, &$cmdRetCode, &$cmdRetMsg)
+{
+    // Format command to daemon
+    $command = 'daemon get-assync-info -erase-completed ' . $cmdId;
 
-		// Check what command returned				
-		$cmdRetMsg = $matches[2];
-		$cmdRetCode = trim(strstr($cmdRetMsg, " ", true)); 							
-		if(strlen($cmdRetCode)<=0)
-			$cmdRetCode = -1;			
-		if($cmdRetCode!=0)
-		{
-			Yii::log('Invalid command return code '.$cmdRetMsg, 'error');			
-		}
-        
-        // Remove beginning code number from message
-        $cmdRetMsg = trim(strstr($cmdRetMsg, " ", false)); 					
-		
-		return self::CAC_COMPLETED;
-	}
+    // Execute the command
+    $response = "";
+    $retCode = Yii::app()->daemon->execCommand($command, $response);
+
+    // Add a message to log
+    Yii::log('Command executed: ' . $command . ', Response: "' . $response . '"', 'info');
+
+    // Check response for "still executing"
+    if (preg_match('/still executing/', $response)) {
+        // This operation is still executing
+        // TODO: check time of execution to notify about frozen operations
+        Yii::log('The operation ' . $cmdId . ' is still in progress', 'info');
+        return self::CAC_STILL_RUNNING;
+    }
+
+    // Get command ID and command's return message.
+    $matches = array();
+    $check = preg_match(
+        '#Command\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}\s*returned\s*\{\s*(\d+)\s*([^}]*)\s*\};#',
+        $response,
+        $matches
+    );
+
+    // Log the regex check result for debugging
+    Yii::log('Regex check: ' . ($check ? 'Match found' : 'No match found'), 'info');
+    if ($check) {
+        Yii::log('Matched command ID: ' . $matches[1], 'info');
+        Yii::log('Matched return code: ' . $matches[2], 'info');
+        Yii::log('Matched return message: ' . $matches[3], 'info');
+    } else {
+        Yii::log('Regex pattern failed to match. Response was: "' . $response . '"', 'error');
+    }
+
+    if (!$check || count($matches) != 4) {
+        Yii::log(
+            'Unexpected response from command ' . $command . ', response = "' . $response . '"',
+            'error'
+        );
+
+        $cmdRetMsg = 'CrashFix service has encountered an unexpected internal error during processing this file.';
+        return self::CAC_ERROR;
+    }
+
+    // Parse the return code and message
+    $cmdRetCode = (int)$matches[2];
+    $cmdRetMsg = trim($matches[3]);
+
+    return self::CAC_COMPLETED;
+}
+
 	
 	/**
 	 * This method reads crash report information from XML file and
