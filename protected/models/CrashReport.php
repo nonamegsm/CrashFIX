@@ -238,16 +238,16 @@ class CrashReport extends CActiveRecord
 								
 		// Create the directory where we will place the uploaded file
 		$subDir1 = substr($this->md5, 0, 3);
-		$subDir2 = substr($this->md5, 3, 3);		
-		$dirName = Yii::app()->getBasePath()."/data/crashReports/".$subDir1."/".$subDir2;
-		if(!@is_dir($dirName))
-		{
-			if(False==@mkdir($dirName, 0777, TRUE))
-			{
-				$error = error_get_last();
-				$this->addError("fileAttachment", "Couldn't make directory: ". $error);
-				return false;
-			}
+		$subDir2 = substr($this->md5, 3, 3);
+		$dirName = Yii::app()->getBasePath() . "/data/crashReports/" . $subDir1 . "/" . $subDir2;
+
+		if (!@is_dir($dirName)) {
+    		if (false === @mkdir($dirName, 0777, true)) {
+        	$error = error_get_last();
+        	$errorMessage = isset($error['message']) ? $error['message'] : 'Unknown error';
+        	$this->addError("fileAttachment", "Couldn't make directory: " . $errorMessage);
+        	return false;
+    		}
 		}
 		
         // Move attachment file to an appropriate directory and delete temp file.
