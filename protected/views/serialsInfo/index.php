@@ -53,8 +53,8 @@ You have no projects assigned.
 	<h4>Advanced Search:</h4>
 	<?php echo CHtml::errorSummary($model); ?>
 	<div class="row">
-	<?php echo CHtml::activeLabel($dataProvider->model,'filename'); ?>
-	<?php echo CHtml::activeTextField($dataProvider->model,'filename', array('value'=>$model->filename)); ?>
+<!--	--><?php //echo CHtml::activeLabel($dataProvider->model,'filename'); ?>
+<!--	--><?php //echo CHtml::activeTextField($dataProvider->model,'filename', array('value'=>$model->filename)); ?>
 	</div>
 	<div class="row">
 	<?php echo CHtml::activeLabel($dataProvider->model,'guid'); ?>
