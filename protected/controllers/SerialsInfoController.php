@@ -8,7 +8,7 @@ require_once "Base/src/base.php";
 Yii::registerAutoloader(array('ezcBase', 'autoload'), true);
 
 
-class DebugInfoController extends Controller
+class SerialsInfoController extends Controller
 {
     // Use two-column layout
     public $layout = '//layouts/column2';
