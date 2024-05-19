@@ -48,8 +48,14 @@ class MainMenuPortlet extends CPortlet
 					'url'=>array('debugInfo/index'), 
 					'active'=>$this->activeItem=='DebugInfo', 
 					'visible'=>Yii::app()->user->checkAccess('pperm_browse_some_debug_info')
-				),				        
-				array(
+				),
+                array(
+                    'label'=>'Serials Info',
+                    'url'=>array('serialsInfo/index'),
+                    'active'=>$this->activeItem=='SerialsInfo',
+                    'visible'=>Yii::app()->user->checkAccess('pperm_browse_some_crash_reports')
+                ),
+                array(
 					'label'=>'Extra Files', 
 					'url'=>array('extraFiles/index'), 
 					'active'=>$this->activeItem=='ExtraFiles', 
