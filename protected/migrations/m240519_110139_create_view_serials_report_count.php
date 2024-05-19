@@ -11,11 +11,11 @@ class m240519_110139_create_view_serials_report_count extends CDbMigration
                 card.`value` AS `card_serial`,
                 COUNT(DISTINCT cr.`id`) AS `report_count`
             FROM 
-                `customprop` box
+                `tbl_customprop` box
             JOIN 
-                `customprop` card ON box.`crashreport_id` = card.`crashreport_id`
+                `tbl_customprop` card ON box.`crashreport_id` = card.`crashreport_id`
             JOIN 
-                `crashreport` cr ON box.`crashreport_id` = cr.`id`
+                `tbl_crashreport` cr ON box.`crashreport_id` = cr.`id`
             WHERE 
                 box.`name` = 'Box Serial'
                 AND card.`name` = 'Card Serial'
