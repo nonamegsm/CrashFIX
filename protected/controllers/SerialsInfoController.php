@@ -93,13 +93,13 @@ class SerialsInfoController extends Controller
         $model = new SerialsInfo('search');
 
         // Fill model fields
-        if (isset($_GET['q'])) {
-            $model->isAdvancedSearch = false;
-            $model->filter = $_GET['q'];
-        } else if (isset($_POST['DebugInfo'])) {
-            $model->isAdvancedSearch = true;
-            $model->attributes = $_POST['DebugInfo'];
-        }
+//        if (isset($_GET['q'])) {
+//            $model->isAdvancedSearch = false;
+//            $model->filter = $_GET['q'];
+//        } else if (isset($_POST['DebugInfo'])) {
+//            $model->isAdvancedSearch = true;
+//            $model->attributes = $_POST['DebugInfo'];
+//        }
 
         // Search
         $dataProvider = $model->search();
