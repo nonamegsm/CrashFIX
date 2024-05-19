@@ -90,7 +90,7 @@ class SerialsInfoController extends Controller
         $this->checkAuthorization(null);
 
         // Create new model that will contain search options.
-        $model = new DebugInfo('search');
+        $model = new SerialsInfo('search');
 
         // Fill model fields
         if (isset($_GET['q'])) {
