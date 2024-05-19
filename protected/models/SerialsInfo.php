@@ -1,10 +1,14 @@
 <?php
 
+
+
 /**
  * This is the model class for the view "view_serials_report_count".
  */
 class SerialsInfo extends CActiveRecord
 {
+
+    public $isAdvancedSearch = false; // Is advanced search enabled?
     /**
      * Returns the static model of the specified AR class.
      * @return SerialsInfo the static model class
