@@ -68,17 +68,18 @@ class SerialsInfo extends CActiveRecord
      */
     public function search()
     {
-        // Warning: Please modify the following code to remove attributes that
-        // should not be searched.
+        $criteria = new CDbCriteria;
 
-        $criteria=new CDbCriteria;
-
-        $criteria->compare('box_serial',$this->box_serial,true);
-        $criteria->compare('card_serial',$this->card_serial,true);
-        $criteria->compare('report_count',$this->report_count);
+        $criteria->compare('box_serial', $this->box_serial, true);
+        $criteria->compare('card_serial', $this->card_serial, true);
+        $criteria->compare('report_count', $this->report_count);
 
         return new CActiveDataProvider($this, array(
-            'criteria'=>$criteria,
+            'criteria' => $criteria,
+            'pagination' => array(
+                'pageSize' => 100, // Set the number of items per page to 100
+            ),
         ));
     }
+
 }
