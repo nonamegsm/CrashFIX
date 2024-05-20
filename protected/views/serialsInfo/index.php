@@ -53,25 +53,25 @@ You have no projects assigned.
 	<h4>Advanced Search:</h4>
 	<?php echo CHtml::errorSummary($model); ?>
 	<div class="row">
-<!--	--><?php //echo CHtml::activeLabel($dataProvider->model,'filename'); ?>
-<!--	--><?php //echo CHtml::activeTextField($dataProvider->model,'filename', array('value'=>$model->filename)); ?>
+<!--	--><?php //echo CHtml::activeLabel($dataProvider->model,'box_serial'); ?>
+<!--	--><?php //echo CHtml::activeTextField($dataProvider->model,'box_serial', array('value'=>$model->box_serial)); ?>
 	</div>
 	<div class="row">
-	<?php echo CHtml::activeLabel($dataProvider->model,'guid'); ?>
-	<?php echo CHtml::activeTextField($dataProvider->model,'guid', array('value'=>$model->guid)); ?>
+<!--	--><?php //echo CHtml::activeLabel($dataProvider->model,'card_serial'); ?>
+<!--	--><?php //echo CHtml::activeTextField($dataProvider->model,'card_serial', array('value'=>$model->card_serial)); ?>
 	</div>
 	<div class="row">
-	<?php echo CHtml::activeLabel($dataProvider->model,'status'); ?>	
-	<?php 
-		$statuses = $dataProvider->model->getStatusList();
-		$statuses = array(-1=>'<any>')+$statuses;
-		echo CHtml::dropDownList('DebugInfo[status]', array('selected'=>$model->status), $statuses); 
-	?>
+<!--	--><?php //echo CHtml::activeLabel($dataProvider->model,'report_count'); ?><!--	-->
+<!--	--><?php //
+//		$statuses = $dataProvider->model->getStatusList();
+//		$statuses = array(-1=>'<any>')+$statuses;
+//		echo CHtml::dropDownList('DebugInfo[status]', array('selected'=>$model->report_count), $statuses);
+//	?>
 	</div>
 	<div class="row">
-	<?php echo CHtml::activeLabel($dataProvider->model,'dateuploaded'); ?>	
+	<?php echo CHtml::activeLabel($dataProvider->model,'dateuploaded'); ?>
 	From:
-	<?php 
+	<?php
 		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
 			'name'=>'DebugInfo[dateFrom]',
 			'value'=>$model->dateFrom,
