@@ -70,34 +70,34 @@ You have no projects assigned.
 	</div>
 	<div class="row">
 	<?php echo CHtml::activeLabel($dataProvider->model,'dateuploaded'); ?>
-	From:
-	<?php
-		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
-			'name'=>'DebugInfo[dateFrom]',
-			'value'=>$model->dateFrom,
-			// additional javascript options for the date picker plugin
-			'options'=>array(
-				'showAnim'=>'fold',
-			),
-			'htmlOptions'=>array(
-				//'style'=>'height:20px;'
-			),
-		  ));
-	?>
-	To:
-	<?php 
-		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
-			'name'=>'DebugInfo[dateTo]',
-			'value'=>$model->dateTo,
-			// additional javascript options for the date picker plugin
-			'options'=>array(
-				'showAnim'=>'fold',
-			),
-			'htmlOptions'=>array(
-				//'style'=>'height:20px;'
-			),
-		  ));
-	?>
+<!--	From:-->
+<!--	--><?php
+//		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
+//			'name'=>'DebugInfo[dateFrom]',
+//			'value'=>$model->dateFrom,
+//			// additional javascript options for the date picker plugin
+//			'options'=>array(
+//				'showAnim'=>'fold',
+//			),
+//			'htmlOptions'=>array(
+//				//'style'=>'height:20px;'
+//			),
+//		  ));
+//	?>
+<!--	To:-->
+<!--	--><?php //
+//		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
+//			'name'=>'DebugInfo[dateTo]',
+//			'value'=>$model->dateTo,
+//			// additional javascript options for the date picker plugin
+//			'options'=>array(
+//				'showAnim'=>'fold',
+//			),
+//			'htmlOptions'=>array(
+//				//'style'=>'height:20px;'
+//			),
+//		  ));
+//	?>
 	</div>
 	<div class="row buttons">
 	<?php echo CHtml::submitButton('Filter', array('id'=>'btn_filter')); ?>
