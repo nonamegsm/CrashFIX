@@ -1,7 +1,8 @@
 <?php
+
+<?php
 /* @var $this SerialsInfoController */
 /* @var $model SerialsInfo */
-/* @var $form CActiveForm */
 
 $this->breadcrumbs=array(
     'Serials Info',
@@ -10,9 +11,10 @@ $this->breadcrumbs=array(
 $this->menu=array(
     array('label'=>'Manage Serials Info', 'url'=>array('index')),
 );
+
 ?>
 
-<h1>Serials Info</h1>
+<h1>Serial Report</h1>
 
 <?php $this->widget('zii.widgets.grid.CGridView', array(
     'id'=>'serials-info-grid',
