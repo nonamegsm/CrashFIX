@@ -1,6 +1,4 @@
 <?php
-
-<?php
 /* @var $this SerialsInfoController */
 /* @var $model SerialsInfo */
 
