@@ -11,6 +11,12 @@ return array(
 	// preloading 'log' component
 	'preload'=>array('log'),
 	
+	'commandMap' => array(
+		'cleanReports' => array(
+			'class' => 'application.commands.CleanReportsCommand',
+		),
+	),
+	
 	// autoloading model and component classes
 	'import'=>array(
 		'application.models.*',
