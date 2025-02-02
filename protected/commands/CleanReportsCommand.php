@@ -90,4 +90,133 @@ class CleanReportsCommand extends CConsoleCommand
             $deltaKB
         );
     }
+	
+	
+	    /**
+     * Scans for orphaned .zip files (no matching CrashReport) and deletes up to $limit.
+     * 
+     * Usage:
+     *   php yiic cleanReports clearOrphans --limit=3000
+     *
+     * @param int $limit max orphaned files to remove in one pass
+     */
+    public function actionClearOrphans($limit = 3000)
+    {
+        echo "Scanning for orphaned .zip files in: {$this->reportDataPath}\n";
+
+        // Measure free disk space before
+        $freeBefore = $this->getFreeSpace($this->reportDataPath);
+
+        // Get up to $limit orphan .zip files
+        $orphanFiles = $this->findOrphanedZipFiles($this->reportDataPath, $limit);
+        $countOrphans = count($orphanFiles);
+
+        if ($countOrphans === 0) {
+            echo "No orphaned files found (or limit exhausted).\n";
+            return;
+        }
+
+        echo "Found {$countOrphans} orphaned file(s). Deleting...\n";
+        $deletedCount = 0;
+        $totalBytesFreed = 0;
+
+        // Delete each orphan .zip
+        foreach ($orphanFiles as $filepath) {
+            $size = filesize($filepath);
+            if (@unlink($filepath)) {
+                $deletedCount++;
+                $totalBytesFreed += $size;
+                // Optionally remove empty directories up the chain
+                $this->removeEmptyDirs(dirname($filepath));
+            }
+        }
+
+        // measure free disk space after
+        $freeAfter = $this->getFreeSpace($this->reportDataPath);
+
+        echo "Deleted {$deletedCount} orphaned file(s).\n";
+        echo sprintf("Freed ~%.2f KB (sum of file sizes).\n", $totalBytesFreed / 1024.0);
+
+        if ($freeBefore >= 0 && $freeAfter >= 0) {
+            $deltaKB = ($freeAfter - $freeBefore) / 1024;
+            echo sprintf(
+                "Disk space before: %.2f KB, after: %.2f KB, delta: %.2f KB.\n",
+                $freeBefore / 1024.0,
+                $freeAfter / 1024.0,
+                $deltaKB
+            );
+        }
+    }
+
+    /**
+     * Gathers up to $limit orphaned .zip files from $startDir.
+     * 
+     * @param string $startDir Folder to scan recursively
+     * @param int $limit how many orphan files to collect
+     * @return string[] Array of absolute file paths to orphaned .zip files
+     */
+    protected function findOrphanedZipFiles($startDir, $limit = 3000)
+    {
+        $results = [];
+        $foundCount = 0;
+
+        $iterator = new RecursiveIteratorIterator(
+            new RecursiveDirectoryIterator($startDir, FilesystemIterator::SKIP_DOTS)
+        );
+
+        foreach ($iterator as $fileinfo) {
+            if ($foundCount >= $limit) {
+                // We reached our limit for this pass; stop searching more
+                break;
+            }
+
+            if ($fileinfo->isFile()) {
+                $filename = $fileinfo->getFilename();
+                // Check if it ends with ".zip"
+                if (strtolower(substr($filename, -4)) === '.zip') {
+                    // Extract the part before ".zip"
+                    $base = substr($filename, 0, -4);
+                    // Is $base a 32-char hex string?
+                    if (preg_match('/^[0-9a-fA-F]{32}$/', $base)) {
+                        // Check DB for CrashReport with md5=$base
+                        $hasReport = CrashReport::model()->exists('md5=:md5', [':md5' => $base]);
+                        if (!$hasReport) {
+                            $results[] = $fileinfo->getPathname();
+                            $foundCount++;
+                        }
+                    }
+                }
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Removes empty directories upward, stopping if not empty or root is reached.
+     */
+    protected function removeEmptyDirs($dir)
+    {
+        // Attempt to remove if empty
+        if (@rmdir($dir)) {
+            // If removal succeeded, check parent
+            $parent = dirname($dir);
+            // Avoid climbing above our base path
+            if (strlen($parent) >= strlen($this->reportDataPath)) {
+                $this->removeEmptyDirs($parent);
+            }
+        }
+    }
+
+    /**
+     * Helper to safely get disk free space (in bytes) on the partition containing $path.
+     * Returns -1 if it fails.
+     */
+    protected function getFreeSpace($path)
+    {
+        $val = @disk_free_space($path);
+        return ($val === false) ? -1 : $val;
+    }
+	
+	
 }
