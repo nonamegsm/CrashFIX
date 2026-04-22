@@ -55,7 +55,7 @@ class SiteController extends Controller
 				'users'=>array('@'),
 			),			
 			array('allow', // Allow admin to access admin panel
-				'actions'=>array('admin', 'daemon', 'daemonStatus'),
+				'actions'=>array('admin', 'daemon', 'daemonStatus', 'daemonRuntimeStats'),
 				'roles'=>array('gperm_access_admin_panel'),
 			),			
 			array('deny',  // deny all users
@@ -343,6 +343,178 @@ class SiteController extends Controller
 			            
             Yii::app()->end();
         }
+	}
+
+	/**
+	 *   Ajax only. Returns runtime statistics about the daemon as JSON.
+	 *   Built entirely from tbl_operation - does not need a daemon TCP roundtrip,
+	 *   so it stays cheap to poll every few seconds.
+	 */
+	public function actionDaemonRuntimeStats()
+	{
+		if(!Yii::app()->request->isAjaxRequest)
+			return;
+
+		header('Content-Type: application/json; charset=utf-8');
+		header('Cache-Control: no-store, no-cache, must-revalidate');
+
+		$db = Yii::app()->db;
+		$now = time();
+		$opStarted   = Operation::STATUS_STARTED;
+		$opSucceeded = Operation::STATUS_SUCCEEDED;
+		$opFailed    = Operation::STATUS_FAILED;
+		$opImportPdb = Operation::OPTYPE_IMPORTPDB;
+		$opProcCrash = Operation::OPTYPE_PROCESS_CRASH_REPORT;
+		$opDelete    = Operation::OPTYPE_DELETE_DEBUG_INFO;
+
+		// Throughput windows
+		$throughput = $db->createCommand(
+			"SELECT
+				SUM(CASE WHEN timestamp >= :t300  THEN 1 ELSE 0 END) AS last_5m,
+				SUM(CASE WHEN timestamp >= :t900  THEN 1 ELSE 0 END) AS last_15m,
+				SUM(CASE WHEN timestamp >= :t3600 THEN 1 ELSE 0 END) AS last_60m
+			 FROM {{operation}}"
+		)->queryRow(true, array(
+			':t300'  => $now - 300,
+			':t900'  => $now - 900,
+			':t3600' => $now - 3600,
+		));
+
+		// Status mix in the last hour
+		$statusRows = $db->createCommand(
+			"SELECT status, COUNT(*) AS n
+			 FROM {{operation}}
+			 WHERE timestamp >= :since
+			 GROUP BY status"
+		)->queryAll(true, array(':since' => $now - 3600));
+
+		$statusMix = array(
+			'started'   => 0,
+			'succeeded' => 0,
+			'failed'    => 0,
+		);
+		foreach($statusRows as $r)
+		{
+			switch((int)$r['status'])
+			{
+				case $opStarted:   $statusMix['started']   = (int)$r['n']; break;
+				case $opSucceeded: $statusMix['succeeded'] = (int)$r['n']; break;
+				case $opFailed:    $statusMix['failed']    = (int)$r['n']; break;
+			}
+		}
+		$totalLastHour = $statusMix['started'] + $statusMix['succeeded'] + $statusMix['failed'];
+		$succRate = ($statusMix['succeeded'] + $statusMix['failed']) > 0
+			? round(100.0 * $statusMix['succeeded'] / ($statusMix['succeeded'] + $statusMix['failed']), 1)
+			: null;
+
+		// Optype breakdown last hour
+		$typeRows = $db->createCommand(
+			"SELECT optype, status, COUNT(*) AS n
+			 FROM {{operation}}
+			 WHERE timestamp >= :since
+			 GROUP BY optype, status"
+		)->queryAll(true, array(':since' => $now - 3600));
+
+		$typeNames = array(
+			$opImportPdb => 'Import PDB',
+			$opProcCrash => 'Process crash report',
+			$opDelete    => 'Delete debug info',
+		);
+		$byType = array();
+		foreach($typeNames as $tid => $tname)
+			$byType[$tname] = array('ok'=>0, 'failed'=>0, 'started'=>0, 'total'=>0);
+		foreach($typeRows as $r)
+		{
+			$tid = (int)$r['optype'];
+			if(!isset($typeNames[$tid]))
+				continue;
+			$tname = $typeNames[$tid];
+			$n = (int)$r['n'];
+			$byType[$tname]['total'] += $n;
+			switch((int)$r['status'])
+			{
+				case $opStarted:   $byType[$tname]['started']  += $n; break;
+				case $opSucceeded: $byType[$tname]['ok']       += $n; break;
+				case $opFailed:    $byType[$tname]['failed']   += $n; break;
+			}
+		}
+
+		// What is the daemon doing RIGHT NOW (currently STARTED)
+		$runningRows = $db->createCommand(
+			"SELECT id, cmdid, optype, timestamp, operand1
+			 FROM {{operation}}
+			 WHERE status = :st
+			 ORDER BY timestamp ASC
+			 LIMIT 50"
+		)->queryAll(true, array(':st' => $opStarted));
+
+		$running = array();
+		foreach($runningRows as $r)
+		{
+			$path = (string)$r['operand1'];
+			// Take just the basename for display
+			$file = basename($path);
+			if($file === '' || $file === '.')
+				$file = $path;
+			$tid = (int)$r['optype'];
+			$running[] = array(
+				'id'        => (int)$r['id'],
+				'cmdid'     => (string)$r['cmdid'],
+				'optype'    => isset($typeNames[$tid]) ? $typeNames[$tid] : ('opcode '.$tid),
+				'started'   => (int)$r['timestamp'],
+				'elapsed_s' => max(0, $now - (int)$r['timestamp']),
+				'file'      => $file,
+			);
+		}
+
+		// Recent failures (last 10)
+		$recentFailRows = $db->createCommand(
+			"SELECT id, cmdid, optype, timestamp, operand1
+			 FROM {{operation}}
+			 WHERE status = :st
+			 ORDER BY id DESC
+			 LIMIT 10"
+		)->queryAll(true, array(':st' => $opFailed));
+
+		$recentFailures = array();
+		foreach($recentFailRows as $r)
+		{
+			$path = (string)$r['operand1'];
+			$file = basename($path);
+			if($file === '' || $file === '.')
+				$file = $path;
+			$tid = (int)$r['optype'];
+			$recentFailures[] = array(
+				'id'      => (int)$r['id'],
+				'optype'  => isset($typeNames[$tid]) ? $typeNames[$tid] : ('opcode '.$tid),
+				'when'    => date('Y-m-d H:i:s', (int)$r['timestamp']),
+				'ago_s'   => max(0, $now - (int)$r['timestamp']),
+				'file'    => $file,
+			);
+		}
+
+		echo CJSON::encode(array(
+			'now'           => $now,
+			'throughput'    => array(
+				'per_5m'  => (int)$throughput['last_5m'],
+				'per_15m' => (int)$throughput['last_15m'],
+				'per_60m' => (int)$throughput['last_60m'],
+				'rate_per_min'  => round((int)$throughput['last_60m'] / 60.0, 2),
+			),
+			'last_hour' => array(
+				'total'       => $totalLastHour,
+				'succeeded'   => $statusMix['succeeded'],
+				'failed'      => $statusMix['failed'],
+				'in_flight'   => $statusMix['started'],
+				'success_pct' => $succRate,
+			),
+			'by_type'         => $byType,
+			'running'         => $running,
+			'running_count'   => count($running),
+			'recent_failures' => $recentFailures,
+		));
+
+		Yii::app()->end();
 	}
 	
 	/**
