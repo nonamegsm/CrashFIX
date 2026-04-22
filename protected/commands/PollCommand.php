@@ -80,93 +80,84 @@ class PollCommand extends CConsoleCommand
 	private function processNewDebugInfoFiles()
 	{
 		Yii::log("Checking for new debug info files ready for import...", "info");
-		
+
 		// Get debug info files that have status 'Pending'
 		$criteria=new CDbCriteria;
-		$criteria->select='*';  
-		$criteria->condition='status='.DebugInfo::STATUS_PENDING_PROCESSING;		
+		$criteria->select='*';
+		$criteria->condition='status='.DebugInfo::STATUS_PENDING_PROCESSING;
 		$criteria->limit=100;
 		$debugInfoFiles = DebugInfo::model()->findAll($criteria);
-		if($debugInfoFiles==Null)		
-			Yii::log('There are no debug info files ready for import', 'info');		
-		else 
-			Yii::log('Found '.count($debugInfoFiles).' debug info files ready for import', 'info');		
-			
-foreach ($crashReportFiles as $crashReport) {
-    // Determine path to crash report file
-    $fileName = $crashReport->getLocalFilePath();
-    // Create a temporary file for outputting results
-    $outFile = tempnam(Yii::app()->getRuntimePath(), "aop");
+		if($debugInfoFiles==Null)
+			Yii::log('There are no debug info files ready for import', 'info');
+		else
+			Yii::log('Found '.count($debugInfoFiles).' debug info files ready for import', 'info');
 
-    // Format daemon command
-    $command = 'assync dumper --dump-crash-report "' . $fileName . '" "' . $outFile . '"';
+		// FIX: this loop was previously copy-pasted from
+		// processNewCrashReportFiles() and iterated $crashReportFiles
+		// (undefined here) calling `assync dumper --dump-crash-report`
+		// instead of `--import-pdb`. Under PHP 7 the undefined variable
+		// silently became null and the loop was a no-op - meaning debug
+		// symbol uploads were never actually processed by the daemon.
+		// Under PHP 8 the undefined-variable warning is fatal.
+		// This is the correct, original implementation that imports
+		// PDB symbol files via the daemon's `--import-pdb` command.
+		foreach($debugInfoFiles as $debugInfo)
+		{
+			// Format command parameters
+			$fileName = $debugInfo->getLocalFilePath();
+			$symDir   = Yii::app()->getBasePath()."/data/debugInfo";
+			$outFile  = tempnam(Yii::app()->getRuntimePath(), "aop");
 
-    // Check if project allows to load PDB files without checking for matching build age
-    if (isset($crashReport->project) && $crashReport->project->require_exact_build_age == false) {
-        $command .= ' --relax-build-age';
-    }
+			// Format command (note: --import-pdb, NOT --dump-crash-report)
+			$command  = 'assync dumper --import-pdb "'.$fileName.'" "'.$symDir.'" "'.$outFile.'"';
 
-    // Execute the command
-    $response = "";
-    $retCode = Yii::app()->daemon->execCommand($command, $response);
+			// Execute the command
+			$responce = "";
+			$retCode  = Yii::app()->daemon->execCommand($command, $responce);
 
-    // Log the response for debugging
-    Yii::log('Command executed: ' . $command . ', Response: ' . $response, 'info');
+			if($retCode!=0)
+			{
+				Yii::log('Error executing command '.$command.', responce = '.$responce, 'error');
+				continue;
+			}
 
-    if ($retCode != 0) {
-        Yii::log('Error executing command ' . $command . ', response = ' . $response, 'error');
-        continue;
-    }
+			// Check response and get command ID from server response
+			$matches = array();
+			$check = preg_match(
+				'#Assync command\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}\s*has\s*been\s*added\s*to\s*the\s*request\s*queue\.\s*#',
+				$responce, $matches);
+			if(!$check || !isset($matches[1]))
+			{
+				Yii::log('Unexpected responce from command '.$command.', responce = '.$responce, 'error');
+				continue;
+			}
 
-    // Check response and get command ID from server response
-    $matches = array();
-    $check = preg_match(
-        '#Assync command\s*\{\s*([0-9]+(?:\.[0-9]+)?)\s*\}\s*has\s*been\s*added\s*to\s*the\s*request\s*queue\.\s*#',
-        $response,
-        $matches
-    );
-
-    // Log the regex check result for debugging
-    Yii::log('Regex check: ' . ($check ? 'Match found' : 'No match found'), 'info');
-    if ($check) {
-        Yii::log('Matched command ID: ' . $matches[1], 'info');
-    } else {
-        Yii::log('Regex pattern failed to match. Response was: ' . $response, 'error');
-    }
-
-    if (!$check || !isset($matches[1])) {
-        Yii::log('Unexpected response from command ' . $command . ', response = ' . $response, 'error');
-        continue;
-    }
-
-	
-			
 			// Begin DB transaction
 			$transaction = Yii::app()->db->beginTransaction();
-						
+
 			try
-			{			
+			{
 				// Create a new operation record in {{operation}} table.
 				$op = new Operation;
-				$op->status = Operation::STATUS_STARTED;
+				$op->status    = Operation::STATUS_STARTED;
 				$op->timestamp = time();
-				$op->srcid = $debugInfo->id;
-				$op->cmdid = $matches[1];
-				$op->optype = Operation::OPTYPE_IMPORTPDB;
-				$op->operand1 = $fileName;
-				$op->operand2 = $outFile;
+				$op->srcid     = $debugInfo->id;
+				$op->cmdid     = $matches[1];
+				$op->optype    = Operation::OPTYPE_IMPORTPDB;
+				$op->operand1  = $fileName;
+				$op->operand2  = $outFile;
 				if(!$op->save())
-				{					
+				{
 					throw new Exception('Could not save an operation record');
-				}			
-				
+				}
+
 				// Update existing debug info record in {{debuginfo}} table.
 				$debugInfo->status = DebugInfo::STATUS_PROCESSING_IN_PROGRESS;
 				if(!$debugInfo->save())
-				{					
-					throw new Exception('Could not save a debug info record');										
+				{
+					throw new Exception('Could not save a debug info record');
 				}
-				
+
 				// Commit transaction
 				$transaction->commit();
 			}
@@ -174,14 +165,11 @@ foreach ($crashReportFiles as $crashReport) {
 			{
 				// Roll back transaction
 				$transaction->rollBack();
-				
-				Yii::log('An exception caught: '.$e->getMessage(), "error");				
+				Yii::log('An exception caught: '.$e->getMessage(), "error");
 			}
-		}		
-		
-		Yii::log(
-				"Finished checking for new debug info files ready for import.", 
-				"info");
+		}
+
+		Yii::log("Finished checking for new debug info files ready for import.", "info");
 	}
 	
 	/**
