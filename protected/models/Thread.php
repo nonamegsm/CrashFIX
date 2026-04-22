@@ -8,6 +8,7 @@
  * @property string $thread_id
  * @property integer $crashreport_id
  */
+#[\AllowDynamicProperties]
 class Thread extends CActiveRecord
 {
 	/**

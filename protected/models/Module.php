@@ -11,6 +11,7 @@
  * @property string $loaded_pdb_name
  * @property string $loaded_image_name
  */
+#[\AllowDynamicProperties]
 class Module extends CActiveRecord
 {
 	/**

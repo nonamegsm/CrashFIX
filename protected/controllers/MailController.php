@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class MailController extends Controller 
 {
     public $layout = 'column2';

@@ -75,7 +75,7 @@ class ezcGraphContext extends ezcBaseStruct
      * @return void
      * @ignore
      */
-    public function __set_state( array $properties )
+    public static function __set_state( array $properties )
     {
         $this->dataset = (string) $properties['dataset'];
         $this->datapoint = (string) $properties['datapoint'];

@@ -7,6 +7,7 @@
  * @property integer $id
  * @property string $filename
  */
+#[\AllowDynamicProperties]
 class BugAttachment extends CActiveRecord
 {
 	public $fileAttachment; // File attachment

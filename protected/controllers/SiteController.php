@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class SiteController extends Controller
 {	
 	public $layout='//layouts/column2';

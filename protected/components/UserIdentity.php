@@ -5,6 +5,7 @@
  * It contains the authentication method that checks if the provided
  * data can identity the user.
  */
+#[\AllowDynamicProperties]
 class UserIdentity extends CUserIdentity
 {
 	public $oneTimeAccessToken; // Used for one-time access when recovering lost password

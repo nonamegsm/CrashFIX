@@ -3,6 +3,7 @@
 /**
  * The Daemon class is used for interaction with crashfix daemon.
  */
+#[\AllowDynamicProperties]
 class Daemon extends CApplicationComponent
 {
 	public $host;        // Service host.

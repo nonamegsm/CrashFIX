@@ -55,7 +55,7 @@ class ezcGraphCoordinate extends ezcBaseStruct
      * @return void
      * @ignore
      */
-    public function __set_state( array $properties )
+    public static function __set_state( array $properties )
     {
         $this->x = $properties['x'];
         $this->y = $properties['y'];

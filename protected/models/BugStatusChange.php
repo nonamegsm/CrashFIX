@@ -12,6 +12,7 @@
  * @property integer $reproducability
  * @property integer $merged_into
  */
+#[\AllowDynamicProperties]
 class BugStatusChange extends CActiveRecord
 {
 	/**

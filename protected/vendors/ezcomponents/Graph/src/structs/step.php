@@ -92,7 +92,7 @@ class ezcGraphAxisStep
      * @return void
      * @ignore
      */
-    public function __set_state( array $properties )
+    public static function __set_state( array $properties )
     {
         $this->position = $properties['position'];
         $this->width = $properties['width'];

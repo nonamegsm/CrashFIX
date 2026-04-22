@@ -2,6 +2,7 @@
 
 Yii::import('zii.widgets.CPortlet');
  
+#[\AllowDynamicProperties]
 class MainMenuPortlet extends CPortlet
 {   
 	public $activeItem;

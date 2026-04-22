@@ -9,6 +9,7 @@
  * @property string $filename
  * @property string $description
  */
+#[\AllowDynamicProperties]
 class FileItem extends CActiveRecord
 {
 	/**

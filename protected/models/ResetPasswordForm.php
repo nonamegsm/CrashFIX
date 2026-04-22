@@ -5,6 +5,7 @@
  * ResetPasswordForm is the data structure for keeping
  * password form data. It is used by the 'resetPassword' action of 'SiteController'.
  */
+#[\AllowDynamicProperties]
 class ResetPasswordForm extends CFormModel
 {	
 	public $password;

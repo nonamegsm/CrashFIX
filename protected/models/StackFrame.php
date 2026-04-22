@@ -5,6 +5,7 @@
  *
  * The followings are the available columns in table '{{stackframe}}':
  */
+#[\AllowDynamicProperties]
 class StackFrame extends CActiveRecord
 {
 	/**

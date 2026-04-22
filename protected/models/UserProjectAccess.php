@@ -9,6 +9,7 @@
  * @property integer $project_id
  * @property integer $usergroup_id
  */
+#[\AllowDynamicProperties]
 class UserProjectAccess extends CActiveRecord
 {
 	/**

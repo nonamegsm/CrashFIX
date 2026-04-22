@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class WebUser extends CWebUser
 {
 	// Store User model to not repeat query.

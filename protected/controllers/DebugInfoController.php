@@ -4,6 +4,7 @@ require_once "Base/src/base.php";
 Yii::registerAutoloader(array('ezcBase', 'autoload'), true);
 
 
+#[\AllowDynamicProperties]
 class DebugInfoController extends Controller
 {	
 	// Use two-column layout

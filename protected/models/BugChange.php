@@ -12,6 +12,7 @@
  * @property integer $comment_id
  * @property integer $attachment_id
  */
+#[\AllowDynamicProperties]
 class BugChange extends CActiveRecord
 {
 	const FLAG_INITIAL_CHANGE = 1; // This change is the initial change (on bug creation).

@@ -7,6 +7,7 @@
  * @property integer $id
  * @property string $text
  */
+#[\AllowDynamicProperties]
 class BugComment extends CActiveRecord
 {
 	/**

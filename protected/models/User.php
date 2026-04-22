@@ -12,6 +12,7 @@
  * A user may be standard (like root). A standard user cant be deleted, 
  * disabled or updated. Non-standard users can be.
  */
+#[\AllowDynamicProperties]
 class User extends CActiveRecord
 {
 	// User statuses.

@@ -40,6 +40,7 @@ if (version_compare(PHP_VERSION, '5.0.0', '<') ) exit("Sorry, this version of PH
  * PHP email creation and transport class
  * @package PHPMailer
  */
+#[\AllowDynamicProperties]
 class PHPMailer {
 
   /////////////////////////////////////////////////
@@ -2815,6 +2816,7 @@ class PHPMailer {
  * Exception handler for PHPMailer
  * @package PHPMailer
  */
+#[\AllowDynamicProperties]
 class phpmailerException extends Exception {
   /**
    * Prettify error message output

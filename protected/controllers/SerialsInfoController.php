@@ -1,6 +1,7 @@
 <?php
 
 
+#[\AllowDynamicProperties]
 class SerialsInfoController extends Controller
 {
     // Use two-column layout

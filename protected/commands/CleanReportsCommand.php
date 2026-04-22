@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class CleanReportsCommand extends CConsoleCommand
 {
     // Adjust if needed – must be the same partition

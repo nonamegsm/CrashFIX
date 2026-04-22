@@ -9,6 +9,7 @@
  * @property integer $status
  * @property string $title
  */
+#[\AllowDynamicProperties]
 class CrashGroup extends CActiveRecord
 {
 	// Status constants

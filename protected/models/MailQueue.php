@@ -13,6 +13,7 @@
  * @property string $email_headers
  * @property string $email_body
  */
+#[\AllowDynamicProperties]
 class MailQueue extends CActiveRecord
 {
 	const STATUS_PENDING   = 1; // The email is awaiting in the queue.

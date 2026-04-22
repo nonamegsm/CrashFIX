@@ -12,6 +12,7 @@
  * @property integer $status
  * @property string $path
  */
+#[\AllowDynamicProperties]
 class ExtraFiles extends CActiveRecord
 {
 	/**

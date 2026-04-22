@@ -4,6 +4,7 @@
  * This is the model class for table "{{debuginfo}}".
  *
  */
+#[\AllowDynamicProperties]
 class DebugInfo extends CActiveRecord
 {	
 	// Debug info file status

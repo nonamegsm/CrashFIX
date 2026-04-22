@@ -5,6 +5,7 @@
  * RecoverPasswordForm is the data structure for keeping
  * user name and email form data. It is used by the 'recoverPassword' action of 'SiteController'.
  */
+#[\AllowDynamicProperties]
 class RecoverPasswordForm extends CFormModel
 {
 	public $username;

@@ -4,6 +4,7 @@ Yii::import('application.vendors.ezcomponents.*');
 require_once "Base/src/base.php"; 
 Yii::registerAutoloader(array('ezcBase', 'autoload'), true);
 
+#[\AllowDynamicProperties]
 class CrashReportController extends Controller
 {	
 	/**

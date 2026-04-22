@@ -7,6 +7,7 @@
  * @property integer $id
  * @property string $name
  */
+#[\AllowDynamicProperties]
 class Project extends CActiveRecord
 {
     // Project version special constants

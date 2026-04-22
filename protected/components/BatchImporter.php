@@ -4,6 +4,7 @@
  * Used for batch import of crash report files and/or symbol files from the import
  * directory. 
  */
+#[\AllowDynamicProperties]
 class BatchImporter
 {
     const IMPORT_CRASH_REPORTS = 1;

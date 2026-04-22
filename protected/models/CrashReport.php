@@ -3,6 +3,7 @@
 /**
  * This is the model class for table "{{crashreport}}".
  */
+#[\AllowDynamicProperties]
 class CrashReport extends CActiveRecord
 {
 	// Crash report status codes

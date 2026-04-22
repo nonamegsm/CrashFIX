@@ -8,6 +8,7 @@
  * @property string $crashreport_id
  * @property string $message
  */
+#[\AllowDynamicProperties]
 class ProcessingError extends CActiveRecord
 {
 	// Processing error types

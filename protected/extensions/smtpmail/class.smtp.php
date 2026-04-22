@@ -43,6 +43,7 @@
  * original author: Chris Ryan
  */
 
+#[\AllowDynamicProperties]
 class SMTP {
   /**
    *  SMTP server port

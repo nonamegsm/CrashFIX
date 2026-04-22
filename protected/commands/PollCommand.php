@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class PollCommand extends CConsoleCommand
 {
 	public function run($args)

@@ -8,6 +8,7 @@
  * @property integer $bug_id
  * @property integer $crashgroup_id
  */
+#[\AllowDynamicProperties]
 class BugCrashGroupMapping extends CActiveRecord
 {
 	/**

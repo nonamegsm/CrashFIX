@@ -8,6 +8,7 @@
  * @property integer $project_id
  * @property string $version
  */
+#[\AllowDynamicProperties]
 class AppVersion extends CActiveRecord
 {
 	/**

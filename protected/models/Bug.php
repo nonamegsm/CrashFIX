@@ -8,6 +8,7 @@ Yii::registerAutoloader(array('ezcBase', 'autoload'), true);
 /**
  * This is the model class for table "{{bug}}".
  */
+#[\AllowDynamicProperties]
 class Bug extends CActiveRecord
 {	
 	// Open statuses.

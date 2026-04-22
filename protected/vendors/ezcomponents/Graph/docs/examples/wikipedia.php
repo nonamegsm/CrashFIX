@@ -1,10 +1,7 @@
 <?php
 
 require 'Base/src/base.php';
-function __autoload( $className )
-{
-        ezcBase::autoload( $className );
-}
+spl_autoload_register('ezcBase::autoload');
 
 // Create the graph
 $graph = new ezcGraphPieChart();

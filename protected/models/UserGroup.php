@@ -15,6 +15,7 @@
  * 
  * A group can be deleted if it is not standard and contains no users.
  */
+#[\AllowDynamicProperties]
 class UserGroup extends CActiveRecord
 {
 	// User group statuses

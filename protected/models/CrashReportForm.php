@@ -1,5 +1,6 @@
 <?php
 
+#[\AllowDynamicProperties]
 class CrashReportForm extends CActiveRecord
 {
 	public $md5;

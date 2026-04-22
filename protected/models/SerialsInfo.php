@@ -5,6 +5,7 @@
 /**
  * This is the model class for the view "view_serials_report_count".
  */
+#[\AllowDynamicProperties]
 class SerialsInfo extends CActiveRecord
 {
 

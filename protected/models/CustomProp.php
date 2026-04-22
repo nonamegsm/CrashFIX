@@ -9,6 +9,7 @@
  * @property string $name
  * @property string $value
  */
+#[\AllowDynamicProperties]
 class CustomProp extends CActiveRecord
 {
 	/**
