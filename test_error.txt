@@ -1,0 +1,15 @@
+EXCEPTION CAUGHT: Unable to resolve the relative route: view. No active controller is available.
+#0 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\helpers\BaseUrl.php(99): yii\helpers\BaseUrl::normalizeRoute('view')
+#1 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\helpers\BaseUrl.php(214): yii\helpers\BaseUrl::toRoute(Array, false)
+#2 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\helpers\BaseHtml.php(429): yii\helpers\BaseUrl::to(Array)
+#3 C:\xampp\htdocs\greta_crashfix\views\user\addProjectRole.php(73): yii\helpers\BaseHtml::a('Cancel', Array, Array)
+#4 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\View.php(347): require('C:\\xampp\\htdocs...')
+#5 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\View.php(257): yii\base\View->renderPhpFile('C:\\xampp\\htdocs...', Array)
+#6 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\View.php(156): yii\base\View->renderFile('C:\\xampp\\htdocs...', Array, Object(app\controllers\UserController))
+#7 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\Controller.php(450): yii\base\View->render('addProjectRole', Array, Object(app\controllers\UserController))
+#8 C:\xampp\htdocs\greta_crashfix\controllers\UserController.php(225): yii\base\Controller->render('addProjectRole', Array)
+#9 [internal function]: app\controllers\UserController->actionAddProjectRole()
+#10 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\InlineAction.php(66): call_user_func_array(Array, Array)
+#11 C:\xampp\htdocs\greta_crashfix\vendor\yiisoft\yii2\base\Controller.php(197): yii\base\InlineAction->runWithParams(Array)
+#12 C:\xampp\htdocs\greta_crashfix\test_add_role.php(25): yii\base\Controller->runAction('add-project-rol...', Array)
+#13 {main}

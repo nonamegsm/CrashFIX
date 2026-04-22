@@ -1,0 +1,295 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+:root {
+    --primary-color: #4f46e5;
+    --primary-hover: #4338ca;
+    --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+    --card-bg: rgba(255, 255, 255, 0.95);
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --border-color: #e2e8f0;
+    --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+}
+
+body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-gradient);
+    color: var(--text-main);
+    min-height: 100vh;
+}
+
+#page {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+}
+
+/* Header & Logo */
+#header {
+    background: var(--card-bg);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 1rem;
+    padding: 0.75rem 1.5rem;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--border-color);
+    margin-bottom: 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+}
+
+#logo_image a {
+    display: flex;
+    align-items: center;
+}
+
+#logo_image img {
+    height: 28px;
+    width: auto;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.05));
+    transition: transform 0.2s;
+}
+
+#logo_image a:hover img {
+    transform: scale(1.05);
+}
+
+#user_name {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-muted);
+}
+
+#user_name a {
+    color: var(--text-main);
+    font-weight: 600;
+    text-decoration: none;
+    transition: color 0.1s;
+}
+
+#user_name a:hover {
+    color: var(--primary-color);
+}
+
+.logout-link {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: #ef4444;
+    text-decoration: none;
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    background: #fef2f2;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.logout-link:hover {
+    background: #fee2e2;
+    color: #dc2626;
+    transform: translateY(-1px);
+}
+
+/* Cards & Dashboard */
+.card {
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-md);
+    transition: transform 0.2s, box-shadow 0.2s;
+    overflow: hidden;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-lg);
+}
+
+.card-header {
+    background: white;
+    border-bottom: 1px solid var(--border-color);
+    font-weight: 600;
+    padding: 1rem 1.25rem;
+    color: var(--text-main);
+}
+
+.card-body {
+    padding: 1.25rem;
+}
+
+/* UI Elements */
+.btn-primary {
+    background: var(--primary-color);
+    border: none;
+    padding: 0.625rem 1.25rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+    transition: all 0.2s;
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    transform: scale(1.02);
+}
+
+.form-control, .form-select {
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    padding: 0.625rem;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
+
+/* Loading indicators */
+.loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.5);
+    min-height: 200px;
+    border-radius: 0.5rem;
+}
+
+/* ProgressBar */
+.progress {
+    background-color: #e2e8f0;
+    border-radius: 1rem;
+    overflow: hidden;
+}
+
+.progress-bar {
+    background: linear-gradient(90deg, #4f46e5 0%, #6366f1 100%);
+    transition: width 0.6s ease;
+}
+
+/* Sidebar & Menus (Portlets) */
+.portlet {
+    width: 100% !important;
+    background: var(--card-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 1rem;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+}
+
+.portlet-decoration {
+    background: white;
+    padding: 1rem 1.25rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.portlet-title {
+    font-size: 0.875rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    color: var(--text-muted);
+}
+
+.portlet-content {
+    padding: 0.5rem 0;
+}
+
+.portlet-content .menu {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.portlet-content .menu li {
+    padding: 0;
+}
+
+.portlet-content .menu li a {
+    display: block;
+    padding: 0.75rem 1.25rem;
+    color: var(--text-main);
+    text-decoration: none;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    border-left: 3px solid transparent;
+}
+
+.portlet-content .menu li a:hover {
+    background: #f8fafc;
+    color: var(--primary-color);
+}
+
+.portlet-content .menu li.active a {
+    background: #f1f5f9;
+    color: var(--primary-color);
+    border-left-color: var(--primary-color);
+    font-weight: 600;
+}
+
+.logout-menu-item {
+    color: #ef4444 !important;
+}
+
+.logout-menu-item:hover {
+    background: #fef2f2 !important;
+    color: #dc2626 !important;
+}
+
+/* Fix overlapping and content width */
+.row {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+#content {
+    overflow-x: auto;
+    word-wrap: break-word;
+}
+
+@media (min-width: 768px) {
+    .col-md-3 {
+        width: 250px;
+        flex: 0 0 250px;
+    }
+    .col-md-9 {
+        width: calc(100% - 250px);
+        flex: 0 0 calc(100% - 250px);
+        padding-left: 2rem;
+    }
+}
+
+/* Admin Menu (Top Toolbar) */
+#adminmenu .portlet {
+    margin-bottom: 1rem;
+}
+
+#adminmenu .menu {
+    display: flex;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+}
+
+#adminmenu .menu li a {
+    border-radius: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+}
+
+#adminmenu .menu li.active a {
+    border-color: var(--border-color);
+    background: white;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Footer */
+#footer {
+    padding: 2rem 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+}

@@ -1,0 +1,34 @@
+2026/03/16 15:07:37 [error] [exception.CDbException] CDbException: CDbConnection failed to open the DB connection: SQLSTATE[HY000] [1045] Access denied for user 'crashfix'@'localhost' (using password: NO) in C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbConnection.php:399
+Stack trace:
+#0 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbConnection.php(347): CDbConnection->open()
+#1 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbConnection.php(325): CDbConnection->setActive(true)
+#2 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\base\CModule.php(394): CDbConnection->init()
+#3 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(472): CModule->getComponent('db')
+#4 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(481): MigrateCommand->getDbConnection()
+#5 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(512): MigrateCommand->getMigrationHistory(-1)
+#6 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(84): MigrateCommand->getNewMigrations()
+#7 [internal function]: MigrateCommand->actionUp(Array)
+#8 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleCommand.php(172): ReflectionMethod->invokeArgs(Object(MigrateCommand), Array)
+#9 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleCommandRunner.php(71): CConsoleCommand->run(Array)
+#10 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleApplication.php(92): CConsoleCommandRunner->run(Array)
+#11 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\base\CApplication.php(184): CConsoleApplication->processRequest()
+#12 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\yiic.php(33): CApplication->run()
+#13 C:\xampp\htdocs\greta_crashfix\legacy\protected\yiic.php(7): require_once('C:\\xampp\\htdocs...')
+#14 {main}
+---
+2026/03/16 15:10:29 [error] [system.db.CDbCommand] CDbCommand::fetchAll() failed: SQLSTATE[42S02]: Base table or view not found: 1146 Table 'crashfix.tbl_migration' doesn't exist. The SQL statement executed was: SHOW FULL COLUMNS FROM `tbl_migration`.
+2026/03/16 15:10:29 [error] [exception.PDOException] PDOException: There is no active transaction in C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbTransaction.php:80
+Stack trace:
+#0 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbTransaction.php(80): PDO->rollBack()
+#1 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\db\CDbMigration.php(64): CDbTransaction->rollback()
+#2 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(415): CDbMigration->up()
+#3 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\cli\commands\MigrateCommand.php(109): MigrateCommand->migrateUp('m121110_163852_...')
+#4 [internal function]: MigrateCommand->actionUp(Array)
+#5 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleCommand.php(172): ReflectionMethod->invokeArgs(Object(MigrateCommand), Array)
+#6 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleCommandRunner.php(71): CConsoleCommand->run(Array)
+#7 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\console\CConsoleApplication.php(92): CConsoleCommandRunner->run(Array)
+#8 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\base\CApplication.php(184): CConsoleApplication->processRequest()
+#9 C:\xampp\htdocs\greta_crashfix\legacy\protected\framework\yiic.php(33): CApplication->run()
+#10 C:\xampp\htdocs\greta_crashfix\legacy\protected\yiic.php(7): require_once('C:\\xampp\\htdocs...')
+#11 {main}
+---
