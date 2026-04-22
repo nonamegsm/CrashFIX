@@ -124,6 +124,26 @@ through `app\components\Daemon`. Without the daemon running, anything
 that calls `Yii::$app->daemon->*` will surface a connection error in the
 admin panel; the rest of the UI continues to work.
 
+## Side-by-side deployment with the legacy Yii1 app
+
+If you have an existing Yii1 CrashFix install and want to run the
+new UI on a separate subdomain alongside it (sharing the same MySQL
+database and optionally the same on-disk file storage), see the
+deployment guide:
+
+- [`docs/deployment/README.md`](docs/deployment/README.md) &mdash;
+  decision matrix + common prerequisites
+- [Option A: Read-only shadow](docs/deployment/option-a-readonly-shadow.md)
+- [Option B: Shared DB, separate storage](docs/deployment/option-b-shared-db.md)
+- [Option C: Shared DB + Legacy storage adapter](docs/deployment/option-c-shared-storage.md)
+
+The new app's
+[`Storage`](components/Storage.php) /
+[`LegacyStorage`](components/LegacyStorage.php) component pair lets
+you switch between the new project-scoped file layout and the
+legacy MD5-sharded layout with a single config change &mdash; no
+code modification needed.
+
 ## Migration Status (Yii 1 &rarr; Yii 2)
 
 See [`MIGRATION_WORKFLOW.md`](MIGRATION_WORKFLOW.md) for a detailed
