@@ -12,6 +12,7 @@
 use yii\helpers\Html;
 use yii\helpers\Url;
 use yii\grid\GridView;
+use yii\grid\CheckboxColumn;
 use app\components\MiscHelpers;
 use app\models\Debuginfo;
 
@@ -34,6 +35,14 @@ $session = Yii::$app->session;
 .cf-active-filter  { display: inline-block; margin-left: 8px; padding: 2px 8px;
                      background: #fff3cd; color: #856404; border-radius: 4px;
                      font-size: 11px; }
+.cf-bulk-bar       { padding: 6px 8px; margin: 4px 0 8px 0; background: #f8f9fa;
+                     border: 1px solid #e1e1e1; border-radius: 4px;
+                     display: flex; align-items: center; gap: 8px;
+                     flex-wrap: wrap; font-size: 12px; }
+.cf-bulk-bar .cf-bulk-count { color: #666; min-width: 110px; }
+.cf-bulk-bar .cf-bulk-spacer { flex: 1; }
+.cf-bulk-bar button { padding: 3px 10px; font-size: 12px; }
+.cf-bulk-bar button[disabled] { opacity: 0.5; cursor: not-allowed; }
 </style>
 
 <h1>Failed Items</h1>
@@ -104,10 +113,63 @@ $session = Yii::$app->session;
                     : 'No failed crash reports match your search.' ?>
             </div>
         <?php else: ?>
+            <?php
+                $crashTotal = (int) $crashProvider->getTotalCount();
+                $crashReturn = (string) Yii::$app->request->url;
+            ?>
+            <?= Html::beginForm(['/site/failed-retry'], 'post',
+                    ['id' => 'cf-bulk-form-crash', 'data-grid-id' => 'cf-grid-crash']) ?>
+            <?= Html::hiddenInput('kind', 'crash') ?>
+            <?= Html::hiddenInput('q',    $crashQ) ?>
+            <?= Html::hiddenInput('return', $crashReturn) ?>
+            <?= Html::hiddenInput('all',  '0', ['data-bulk-all' => '1']) ?>
+
+            <div class="cf-bulk-bar">
+                <span class="cf-bulk-count" data-counter="cf-grid-crash">0 selected</span>
+                <button type="submit"
+                        class="btn btn-sm btn-outline-warning cf-bulk-btn-selected"
+                        data-action="<?= Url::to(['/site/failed-retry']) ?>"
+                        data-confirm-prefix="Re-queue"
+                        data-kind-label="crash report"
+                        disabled>Retry selected</button>
+                <button type="submit"
+                        class="btn btn-sm btn-outline-danger cf-bulk-btn-selected"
+                        data-action="<?= Url::to(['/site/failed-delete']) ?>"
+                        data-confirm-prefix="PERMANENTLY DELETE"
+                        data-kind-label="crash report"
+                        disabled>Delete selected</button>
+
+                <span class="cf-bulk-spacer"></span>
+
+                <button type="submit"
+                        class="btn btn-sm btn-warning cf-bulk-btn-all"
+                        data-action="<?= Url::to(['/site/failed-retry']) ?>"
+                        data-confirm-msg="Re-queue ALL <?= $crashTotal ?> matching crash reports?
+They'll be picked up by the daemon on the next poll cycle.">
+                    Retry ALL <?= $crashTotal ?> matching
+                </button>
+                <button type="submit"
+                        class="btn btn-sm btn-danger cf-bulk-btn-all"
+                        data-action="<?= Url::to(['/site/failed-delete']) ?>"
+                        data-confirm-msg="PERMANENTLY DELETE all <?= $crashTotal ?> matching crash reports?
+This cannot be undone. The on-disk .zip files will also be removed.
+(Capped at 500 per click; click again if more remain.)">
+                    Delete ALL <?= $crashTotal ?> matching
+                </button>
+            </div>
+
             <?= GridView::widget([
+                'id'           => 'cf-grid-crash',
                 'dataProvider' => $crashProvider,
                 'layout'       => "{items}\n{pager}\n{summary}",
                 'columns' => [
+                    [
+                        'class' => CheckboxColumn::class,
+                        'name'  => 'ids',
+                        'checkboxOptions' => function ($d) {
+                            return ['value' => (int) $d->id, 'class' => 'cf-row-checkbox'];
+                        },
+                    ],
                     [
                         'attribute' => 'id',
                         'label'     => 'ID',
@@ -160,20 +222,25 @@ $session = Yii::$app->session;
                         'header' => 'Action',
                         'format' => 'raw',
                         'value'  => function ($d) {
-                            return Html::beginForm(['/site/failed-retry'], 'post',
-                                    ['style' => 'display:inline; margin:0;'])
-                                . Html::hiddenInput('kind', 'crash')
-                                . Html::hiddenInput('id', (int) $d->id)
-                                . Html::submitButton('Retry',
-                                    ['class' => 'btn btn-sm btn-outline-warning',
-                                     'data-confirm' =>
-                                        'Re-queue crash report #' . (int) $d->id . '?'])
-                                . Html::endForm();
+                            // Per-row Retry: a plain (non-submit) button
+                            // carrying data-attrs. JS at the bottom of the
+                            // page turns the click into a single-row POST
+                            // to /site/failed-retry. This avoids nesting
+                            // a <form> inside the surrounding bulk form
+                            // (invalid HTML).
+                            return Html::button('Retry', [
+                                'type'  => 'button',
+                                'class' => 'btn btn-sm btn-outline-warning cf-row-retry',
+                                'data-row-id' => (int) $d->id,
+                                'data-confirm' =>
+                                    'Re-queue crash report #' . (int) $d->id . '?',
+                            ]);
                         },
                         'contentOptions' => ['style' => 'white-space:nowrap; width:80px'],
                     ],
                 ],
             ]) ?>
+            <?= Html::endForm() ?>
         <?php endif; ?>
     </div>
 <?php elseif (!$canCrash): ?>
@@ -223,10 +290,63 @@ $session = Yii::$app->session;
                     : 'No failed debug-info files match your search.' ?>
             </div>
         <?php else: ?>
+            <?php
+                $debugTotal  = (int) $debugProvider->getTotalCount();
+                $debugReturn = (string) Yii::$app->request->url;
+            ?>
+            <?= Html::beginForm(['/site/failed-retry'], 'post',
+                    ['id' => 'cf-bulk-form-debug', 'data-grid-id' => 'cf-grid-debug']) ?>
+            <?= Html::hiddenInput('kind',   'debug') ?>
+            <?= Html::hiddenInput('q',      $debugQ) ?>
+            <?= Html::hiddenInput('return', $debugReturn) ?>
+            <?= Html::hiddenInput('all',    '0', ['data-bulk-all' => '1']) ?>
+
+            <div class="cf-bulk-bar">
+                <span class="cf-bulk-count" data-counter="cf-grid-debug">0 selected</span>
+                <button type="submit"
+                        class="btn btn-sm btn-outline-warning cf-bulk-btn-selected"
+                        data-action="<?= Url::to(['/site/failed-retry']) ?>"
+                        data-confirm-prefix="Re-queue"
+                        data-kind-label="debug-info file"
+                        disabled>Retry selected</button>
+                <button type="submit"
+                        class="btn btn-sm btn-outline-danger cf-bulk-btn-selected"
+                        data-action="<?= Url::to(['/site/failed-delete']) ?>"
+                        data-confirm-prefix="PERMANENTLY DELETE"
+                        data-kind-label="debug-info file"
+                        disabled>Delete selected</button>
+
+                <span class="cf-bulk-spacer"></span>
+
+                <button type="submit"
+                        class="btn btn-sm btn-warning cf-bulk-btn-all"
+                        data-action="<?= Url::to(['/site/failed-retry']) ?>"
+                        data-confirm-msg="Re-queue ALL <?= $debugTotal ?> matching debug-info files?
+They'll be picked up by the daemon on the next poll cycle.">
+                    Retry ALL <?= $debugTotal ?> matching
+                </button>
+                <button type="submit"
+                        class="btn btn-sm btn-danger cf-bulk-btn-all"
+                        data-action="<?= Url::to(['/site/failed-delete']) ?>"
+                        data-confirm-msg="PERMANENTLY DELETE all <?= $debugTotal ?> matching debug-info files?
+This cannot be undone. The on-disk symbol files will also be removed.
+(Capped at 500 per click; click again if more remain.)">
+                    Delete ALL <?= $debugTotal ?> matching
+                </button>
+            </div>
+
             <?= GridView::widget([
+                'id'           => 'cf-grid-debug',
                 'dataProvider' => $debugProvider,
                 'layout'       => "{items}\n{pager}\n{summary}",
                 'columns' => [
+                    [
+                        'class' => CheckboxColumn::class,
+                        'name'  => 'ids',
+                        'checkboxOptions' => function ($d) {
+                            return ['value' => (int) $d->id, 'class' => 'cf-row-checkbox'];
+                        },
+                    ],
                     [
                         'attribute' => 'id',
                         'label'     => 'ID',
@@ -293,20 +413,19 @@ $session = Yii::$app->session;
                         'header' => 'Action',
                         'format' => 'raw',
                         'value'  => function ($d) {
-                            return Html::beginForm(['/site/failed-retry'], 'post',
-                                    ['style' => 'display:inline; margin:0;'])
-                                . Html::hiddenInput('kind', 'debug')
-                                . Html::hiddenInput('id', (int) $d->id)
-                                . Html::submitButton('Retry',
-                                    ['class' => 'btn btn-sm btn-outline-warning',
-                                     'data-confirm' =>
-                                        'Re-queue debug-info file #' . (int) $d->id . '?'])
-                                . Html::endForm();
+                            return Html::button('Retry', [
+                                'type'  => 'button',
+                                'class' => 'btn btn-sm btn-outline-warning cf-row-retry',
+                                'data-row-id' => (int) $d->id,
+                                'data-confirm' =>
+                                    'Re-queue debug-info file #' . (int) $d->id . '?',
+                            ]);
                         },
                         'contentOptions' => ['style' => 'white-space:nowrap; width:80px'],
                     ],
                 ],
             ]) ?>
+            <?= Html::endForm() ?>
         <?php endif; ?>
     </div>
 <?php elseif (!$canDebug): ?>
@@ -317,3 +436,144 @@ $session = Yii::$app->session;
         </div>
     </div>
 <?php endif; ?>
+
+<?php
+// CSRF token for the dynamically-built per-row Retry forms.
+$csrfParam = Yii::$app->request->csrfParam;
+$csrfToken = Yii::$app->request->csrfToken;
+$csrfJsParam = json_encode($csrfParam, JSON_UNESCAPED_SLASHES);
+$csrfJsToken = json_encode($csrfToken, JSON_UNESCAPED_SLASHES);
+$retryUrlJs  = json_encode(\yii\helpers\Url::to(['/site/failed-retry']), JSON_UNESCAPED_SLASHES);
+
+$this->registerJs(<<<JS
+(function () {
+    var CSRF_PARAM = $csrfJsParam;
+    var CSRF_TOKEN = $csrfJsToken;
+    var RETRY_URL  = $retryUrlJs;
+
+    // ---------------- Selection counter for bulk-bar buttons ----------------
+    function updateCounter(form) {
+        var gridId = form.getAttribute('data-grid-id');
+        var counter = document.querySelector('[data-counter="' + gridId + '"]');
+        var grid   = document.getElementById(gridId);
+        if (!grid || !counter) return;
+        var n = grid.querySelectorAll('input.cf-row-checkbox:checked').length;
+        counter.textContent = n + ' selected';
+        // Toggle the "selected" buttons within this form
+        var btns = form.querySelectorAll('.cf-bulk-btn-selected');
+        for (var i = 0; i < btns.length; i++) {
+            btns[i].disabled = (n === 0);
+        }
+    }
+
+    // Wire counters for both bulk forms.
+    var bulkForms = document.querySelectorAll('form[data-grid-id]');
+    for (var i = 0; i < bulkForms.length; i++) {
+        var form = bulkForms[i];
+        var grid = document.getElementById(form.getAttribute('data-grid-id'));
+        if (grid) {
+            grid.addEventListener('change', (function (f) {
+                return function (e) {
+                    if (e.target && e.target.classList && e.target.classList.contains('cf-row-checkbox')) {
+                        updateCounter(f);
+                    }
+                    // The header "select all" checkbox emitted by Yii2's
+                    // CheckboxColumn doesn't carry our class, but it
+                    // bubbles changes from each row checkbox after the
+                    // built-in handler runs. So a small setTimeout
+                    // ensures the counter sees the post-update state.
+                    setTimeout(function () { updateCounter(f); }, 0);
+                };
+            })(form));
+        }
+        updateCounter(form);
+    }
+
+    // ---------------- Bulk button click handler ----------------------------
+    // Each bulk button in the bar carries:
+    //   data-action       : URL to POST to (overrides form.action)
+    //   data-confirm-msg  : full confirm() text (used by "ALL" buttons)
+    //   data-confirm-prefix : prefix for synthetic confirm of "selected"
+    //   data-kind-label   : "crash report" / "debug-info file" for confirm
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cf-bulk-btn-selected, .cf-bulk-btn-all');
+        if (!btn) return;
+        var form = btn.closest('form[data-grid-id]');
+        if (!form) return;
+
+        var action = btn.getAttribute('data-action');
+        if (action) form.setAttribute('action', action);
+
+        // Build confirm message
+        var msg;
+        var isAll = btn.classList.contains('cf-bulk-btn-all');
+        if (isAll) {
+            msg = btn.getAttribute('data-confirm-msg') || 'Are you sure?';
+            // Mark form as "all matching" so the controller picks the
+            // filter-driven path instead of the ids[] path.
+            var hidAll = form.querySelector('[data-bulk-all]');
+            if (hidAll) hidAll.value = '1';
+            // Strip ids[] from the form so the controller routes via
+            // the all=1 path even if checkboxes were ticked too.
+            // Simplest: temporarily uncheck them.
+            var grid = document.getElementById(form.getAttribute('data-grid-id'));
+            if (grid) {
+                var cb = grid.querySelectorAll('input.cf-row-checkbox:checked');
+                for (var i = 0; i < cb.length; i++) cb[i].checked = false;
+            }
+        } else {
+            var grid = document.getElementById(form.getAttribute('data-grid-id'));
+            var n = grid ? grid.querySelectorAll('input.cf-row-checkbox:checked').length : 0;
+            if (n === 0) {
+                e.preventDefault();
+                alert('Select one or more rows first.');
+                return;
+            }
+            var prefix = btn.getAttribute('data-confirm-prefix') || 'Process';
+            var label  = btn.getAttribute('data-kind-label')     || 'item';
+            msg = prefix + ' ' + n + ' selected ' + label + (n === 1 ? '' : 's') + '?';
+            var hidAll = form.querySelector('[data-bulk-all]');
+            if (hidAll) hidAll.value = '0';
+        }
+        if (!confirm(msg)) {
+            e.preventDefault();
+            return;
+        }
+        // Form will submit normally; nothing more to do.
+    });
+
+    // ---------------- Per-row Retry click handler --------------------------
+    // The button is a plain <button type="button">; we synthesise a tiny
+    // form on click and submit it. Avoids nesting a <form> inside the
+    // bulk form (invalid HTML).
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cf-row-retry');
+        if (!btn) return;
+        e.preventDefault();
+        var msg = btn.getAttribute('data-confirm') || 'Re-queue this item?';
+        if (!confirm(msg)) return;
+
+        // Determine kind from the surrounding bulk form (crash or debug).
+        var bulk = btn.closest('form[data-grid-id]');
+        var kind = bulk ? bulk.querySelector('input[name="kind"]').value : '';
+        var rowId = btn.getAttribute('data-row-id');
+
+        var f = document.createElement('form');
+        f.method = 'post';
+        f.action = RETRY_URL;
+        f.style.display = 'none';
+        function add(name, value) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = name; i.value = value;
+            f.appendChild(i);
+        }
+        add(CSRF_PARAM, CSRF_TOKEN);
+        add('kind', kind);
+        add('id',   rowId);
+        document.body.appendChild(f);
+        f.submit();
+    });
+})();
+JS
+);
+?>
