@@ -74,41 +74,73 @@ class m260423_000002_convert_to_utf8mb4 extends CDbMigration
             "ALTER DATABASE `$dbName` CHARACTER SET = $target COLLATE = $coll"
         );
 
-        // 2. Find every table with the CrashFix prefix and convert
-        //    each one whose current default charset is not yet utf8mb4.
-        $sql = "
-            SELECT t.TABLE_NAME, ccsa.CHARACTER_SET_NAME
-              FROM information_schema.TABLES t
-              JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa
-                ON ccsa.COLLATION_NAME = t.TABLE_COLLATION
-             WHERE t.TABLE_SCHEMA = :db
-               AND t.TABLE_TYPE   = 'BASE TABLE'
-               AND t.TABLE_NAME LIKE :pfx
-        ";
-        $rows = $db->createCommand($sql)
-                   ->queryAll(true, array(
-                       ':db'  => $dbName,
-                       ':pfx' => $prefix . '%',
-                   ));
+        // 2. Disable foreign-key checks for the duration of the walk.
+        //    Without this, ALTER TABLE ... CONVERT TO CHARACTER SET
+        //    fails on any column referenced by an FK with:
+        //       1832 Cannot change column 'X': used in a foreign key
+        //            constraint 'Y'
+        //    because MySQL will not convert one side of an FK without
+        //    converting the other in lockstep. With FK checks off, each
+        //    ALTER succeeds in isolation; once every table in the walk
+        //    has been converted, both sides of every FK are again at
+        //    matching charsets and the constraint validates cleanly
+        //    when checks are re-enabled below.
+        //
+        //    SET FOREIGN_KEY_CHECKS is a session-scoped setting on
+        //    the current connection. Migrations run in a single
+        //    connection, so the setting persists across all the
+        //    ALTER statements in the loop below.
+        //
+        //    The try / finally is critical: if any ALTER throws (e.g.
+        //    a row that won't fit in a utf8mb4 widened key), we MUST
+        //    re-enable FK checks before rethrowing, otherwise the
+        //    next request on the same long-lived connection runs
+        //    with checks off and silently corrupts referential
+        //    integrity.
+        $this->execute("SET FOREIGN_KEY_CHECKS = 0");
+        try {
+            // 3. Find every table with the CrashFix prefix and convert
+            //    each one whose current default charset is not yet utf8mb4.
+            $sql = "
+                SELECT t.TABLE_NAME, ccsa.CHARACTER_SET_NAME
+                  FROM information_schema.TABLES t
+                  JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa
+                    ON ccsa.COLLATION_NAME = t.TABLE_COLLATION
+                 WHERE t.TABLE_SCHEMA = :db
+                   AND t.TABLE_TYPE   = 'BASE TABLE'
+                   AND t.TABLE_NAME LIKE :pfx
+            ";
+            $rows = $db->createCommand($sql)
+                       ->queryAll(true, array(
+                           ':db'  => $dbName,
+                           ':pfx' => $prefix . '%',
+                       ));
 
-        $converted = 0;
-        $skipped   = 0;
-        foreach ($rows as $r) {
-            $tname  = $r['TABLE_NAME'];
-            $cset   = $r['CHARACTER_SET_NAME'];
-            if ($cset === $target) {
-                $skipped++;
-                continue;
+            $converted = 0;
+            $skipped   = 0;
+            foreach ($rows as $r) {
+                $tname  = $r['TABLE_NAME'];
+                $cset   = $r['CHARACTER_SET_NAME'];
+                if ($cset === $target) {
+                    $skipped++;
+                    continue;
+                }
+                echo "    converting $tname ($cset -> $target)\n";
+                $this->execute(
+                    "ALTER TABLE `$tname`
+                        CONVERT TO CHARACTER SET $target COLLATE $coll"
+                );
+                $converted++;
             }
-            echo "    converting $tname ($cset -> $target)\n";
-            $this->execute(
-                "ALTER TABLE `$tname`
-                    CONVERT TO CHARACTER SET $target COLLATE $coll"
-            );
-            $converted++;
-        }
 
-        echo "  done: $converted converted, $skipped already-utf8mb4\n";
+            echo "  done: $converted converted, $skipped already-utf8mb4\n";
+        } finally {
+            // Always re-enable FK checks on this connection, even if a
+            // row above threw. If we left them off, the next query on
+            // this connection (within the same yiic process) would
+            // bypass referential integrity.
+            $this->execute("SET FOREIGN_KEY_CHECKS = 1");
+        }
     }
 
     public function safeDown()
