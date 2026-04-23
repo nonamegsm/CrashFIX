@@ -1,11 +1,10 @@
 <?php
 
 /** @var yii\web\View $this */
-/** @var yii\bootstrap5\ActiveForm $form */
 /** @var app\models\ContactForm $model */
 
 use yii\bootstrap4\ActiveForm;
-use yii\bootstrap4\Html;
+use yii\helpers\Html;
 use yii\captcha\Captcha;
 
 $this->title = 'Contact';
@@ -13,6 +12,10 @@ $this->params['breadcrumbs'][] = $this->title;
 ?>
 <div class="site-contact">
     <h1><?= Html::encode($this->title) ?></h1>
+
+    <?php if (Yii::$app->session->hasFlash('error')): ?>
+        <div class="alert alert-danger"><?= Html::encode(Yii::$app->session->getFlash('error')) ?></div>
+    <?php endif; ?>
 
     <?php if (Yii::$app->session->hasFlash('contactFormSubmitted')): ?>
 

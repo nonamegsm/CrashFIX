@@ -29,7 +29,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 - **Additional areas:** Extra Files (collections ZIP), Serials Info (admin grid + view), full **web installer** with **new DB** vs **existing Yii1 DB** path, **legacy file storage** via `user_params.ini` + `LegacyStorage`, **Poll / daemon tick** (`PollService` + traits for XML import).
 - **Auth:** `IdentityInterface` on `User`, RBAC `DbManager` with legacy table names.
 - **Password flows:** Login, reset password, **recover password** (`RecoverPasswordForm` + `views/site/recoverPassword.php`).
-- **Site:** Failed items + bulk retry/delete, daemon admin + runtime stats, **static pages** `site/page` → `views/site/pages/*.php`.
+- **Site:** Failed items + bulk retry/delete, daemon admin + runtime stats, **static pages** `site/page` → `views/site/pages/*.php`, **contact** form (`actionContact` → `views/site/contact.php`, CAPTCHA, mail to `adminEmail`).
 - **Crash reports:** Tabbed view with `_viewSummary`, `_viewFiles`, `_viewCustomProps`, `_viewVideos`, `_viewScreenshots`, `_viewThreads`, `_viewModules`, `_upload`, `_reportList`, **`_search`** (index filters).
 - **Bugs:** `view.php` + history via **`views/site/_bugChange.php`**; index uses `BugSearch` + inline filter form (no separate `_search` partial).
 - **Debug info:** `uploadFile.php`, **`views/debug-info/_upload.php`**, format/DWARF columns where migrated.
@@ -41,7 +41,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 
 | Item | Notes |
 |------|--------|
-| **`SiteController::actionContact`** | `views/site/contact.php` and `ContactForm` exist; **no `actionContact`** wired in `SiteController` (and no access rule). Wire or remove the orphan view. |
+| *(none significant here)* | Older “orphan contact” note is **resolved** — see `SiteController::actionContact`. |
 | **`CrashReportForm` (dedicated model)** | Upload path uses **`Crashreport`** AR + `UploadedFile`; legacy had a separate form model — optional refactor for parity only. |
 | **Extracted `_search` partials** | Crash **report** has `_search.php`. **Bug** / **crash-group** use **inline** GET forms on `index.php` instead of a shared `_search` partial — behaviour OK, structure differs from Yii1. |
 | **Project `views/project/_view.php` / `_search.php`** | **Not present**; `view.php` / `index.php` are self-contained. Optional cleanup for consistency only. |
@@ -51,8 +51,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 
 ### What's MISSING (still worth tracking)
 
-1. **`actionContact` + access rules** (or delete unused `contact.php`).
-2. **Optional:** dedicated **`CrashReportForm`** mirroring legacy naming.
+1. **Optional:** dedicated **`CrashReportForm`** mirroring legacy naming.
 3. **Test suite completion** (model rules, uploads, RBAC, installer paths).
 4. **Production hardening** (Phase 7 items: strip debug tools, prod config checklist — see below).
 
@@ -107,8 +106,9 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 - [ ] **2.5** Legacy base `Controller` filters — port any missing cross-cutting behaviour if found.
 - [x] **2.6** Crash report + debug info uploads present; storage abstraction used.
 - [x] **2.7** Daemon used from Site admin + Poll tick + controllers that dispatch work.
+- [x] **2.8** `SiteController::actionContact` — public form, CAPTCHA, e-mail via `ContactForm` to `params['adminEmail']`.
 
-**Deliverable:** No known stub for critical user journeys except contact (see PARTIAL).
+**Deliverable:** No known stub for critical user journeys covered in this phase.
 
 ---
 
@@ -159,7 +159,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 
 - [~] **3.18–3.21** Ongoing when editing views; no open “all files must be rewritten” task.
 
-**Deliverable:** Primary user flows render; see PARTIAL for contact page wiring.
+**Deliverable:** Primary user flows render; see PARTIAL for minor gaps.
 
 ---
 
@@ -217,7 +217,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 
 ### Role 2: Frontend Lead (Views & UI)
 **Owns:** Phase 3  
-**Focus:** AdminLTE consistency, accessibility, remaining contact page wiring.
+**Focus:** AdminLTE consistency, accessibility.
 
 ### Role 3: Infrastructure & DevOps
 **Owns:** Phases 0, 4, 7  
@@ -276,7 +276,7 @@ Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required a
 
 ## Priority Order (updated)
 
-1. **Close real gaps:** wire **`actionContact`** or remove orphan view; any security/access review for new modules.
+1. **Close real gaps:** security/access review when adding new modules; optional **`CrashReportForm`**.
 2. **Phase 6** — tests for installer, upload, Poll, RBAC before prod.
 3. **Phase 4 / 7** — production config, logging, daemon connectivity monitoring.
 4. **Cosmetic** — extract `_search` partials for bug/crash-group if the team wants file symmetry with Yii1.

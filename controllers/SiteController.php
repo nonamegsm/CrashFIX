@@ -114,6 +114,41 @@ class SiteController extends Controller
         return $this->render('pages/' . $view);
     }
 
+    /**
+     * Public contact form (e-mail to {@see \Yii::$app->params} `adminEmail`).
+     */
+    public function actionContact()
+    {
+        $this->layout = 'column1';
+
+        $model = new ContactForm();
+        if ($model->load(Yii::$app->request->post())) {
+            $to = (string) (Yii::$app->params['adminEmail'] ?? Yii::$app->params['senderEmail'] ?? '');
+            if ($to === '') {
+                Yii::$app->session->setFlash(
+                    'error',
+                    'The contact form is not configured. Set params adminEmail (or senderEmail) in config.'
+                );
+            } else {
+                try {
+                    if ($model->contact($to)) {
+                        Yii::$app->session->setFlash('contactFormSubmitted', true);
+
+                        return $this->refresh();
+                    }
+                } catch (\Throwable $e) {
+                    Yii::error($e->__toString(), 'mail');
+                    Yii::$app->session->setFlash(
+                        'error',
+                        'Could not send your message. Please try again later or notify an administrator.'
+                    );
+                }
+            }
+        }
+
+        return $this->render('contact', ['model' => $model]);
+    }
+
     public function actionLogin($prt = null)
     {
         if (!Yii::$app->user->isGuest) {
