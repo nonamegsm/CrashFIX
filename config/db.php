@@ -20,7 +20,12 @@ return [
     'dsn' => str_replace('%DATA_DIR%', __DIR__ . '/../data', $userParams['db_connection_string'] ?? 'mysql:host=127.0.0.1;dbname=crashfix'),
     'username' => $userParams['db_username'] ?? 'crashfix',
     'password' => $userParams['db_password'] ?? '',
-    'charset' => 'utf8',
+    // utf8mb4 (full 4-byte UTF-8) instead of the deprecated 3-byte
+    // 'utf8' alias. Required so crash reports containing Cyrillic /
+    // CJK / emoji / supplementary-plane characters do not blow up
+    // tbl_customprop / tbl_crashreport inserts with
+    //   "Incorrect string value: '\xD0\xA4...' for column ...".
+    'charset' => 'utf8mb4',
     'tablePrefix' => $userParams['db_table_prefix'] ?? 'tbl_',
 
     // Schema cache options (for production environment)
