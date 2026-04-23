@@ -21,7 +21,16 @@ $urlParams = $groupid !== null ? ['groupid' => $groupid] : [];
 $deleteMultipleUrl    = Url::to(array_merge(['/crash-report/delete-multiple'],    $urlParams));
 $reprocessMultipleUrl = Url::to(array_merge(['/crash-report/reprocess-multiple'], $urlParams));
 $reprocessAllUrl      = Url::to(array_merge(['/crash-report/reprocess-all'],      $urlParams));
+$deleteAllByVerUrl     = Url::to(['/crash-report/delete-all-by-ver']);
+$deleteAllBeforeVerUrl = Url::to(['/crash-report/delete-all-before-ver']);
+$packAllByVerUrl       = Url::to(['/crash-report/pack-all-by-ver']);
 $uploadFileUrl        = Url::to(['/crash-report/upload-file']);
+
+// Whether the user has chosen a specific version (vs the "All
+// versions" sentinel -1). The "Delete all reports BEFORE current
+// version" item only makes sense for a specific version.
+$curProjVer = (int) Yii::$app->user->getCurProjectVer();
+$specificVerSelected = $curProjVer !== -1;
 
 $totalRows = (int) $dataProvider->getTotalCount();
 $gridId    = 'cf-grid-crashreports';
@@ -77,6 +86,45 @@ $formId    = 'cf-bulk-form-crashreports';
                        data-confirm-msg="WARNING: this may take a long time. Reprocess ALL <?= $totalRows ?> crash reports <?= $groupid !== null ? 'in this collection' : 'in the currently selected project version' ?>?">
                         Reprocess All Reports<?= $groupid !== null ? ' In Collection' : '' ?>
                     </a>
+
+                    <?php if ($groupid === null): ?>
+                        <?php // The bulk-by-version actions are intentionally
+                              // NOT shown inside a Crash Group view (the group
+                              // already implies a scope; mixing per-version
+                              // bulk delete on top would be confusing). ?>
+                        <div class="dropdown-divider"></div>
+                        <a class="dropdown-item cf-bulk-link text-danger"
+                           href="#"
+                           data-form="<?= $formId ?>"
+                           data-action="<?= Html::encode($deleteAllByVerUrl) ?>"
+                           data-mode="all"
+                           data-confirm-msg="WARNING: this PERMANENTLY DELETES every crash report <?= $specificVerSelected ? 'of the currently selected version' : 'in the entire project (you have All versions selected)' ?>. The on-disk .zip files will also be removed. This cannot be undone. Continue?">
+                            Delete All Reports Of Current Version
+                        </a>
+                        <a class="dropdown-item cf-bulk-link text-danger
+                                  <?= $specificVerSelected ? '' : 'disabled' ?>"
+                           href="#"
+                           <?php if ($specificVerSelected): ?>
+                           data-form="<?= $formId ?>"
+                           data-action="<?= Html::encode($deleteAllBeforeVerUrl) ?>"
+                           data-mode="all"
+                           data-confirm-msg="WARNING: this PERMANENTLY DELETES every crash report whose version is older than the currently selected one, AND removes those AppVersion rows. Cannot be undone. Continue?"
+                           <?php else: ?>
+                           tabindex="-1"
+                           aria-disabled="true"
+                           title="Pick a specific version (not All) to use this action"
+                           <?php endif; ?>>
+                            Delete All Reports Before Current Version
+                        </a>
+                        <a class="dropdown-item cf-bulk-link"
+                           href="#"
+                           data-form="<?= $formId ?>"
+                           data-action="<?= Html::encode($packAllByVerUrl) ?>"
+                           data-mode="all"
+                           data-confirm-msg="Copy all <?= $totalRows ?> crash reports <?= $specificVerSelected ? 'of the currently selected version' : '(All versions)' ?> into a dated pack directory under /data/packedReports/? You'll receive an email when the pack is ready.">
+                            Pack Reports Files Of Current Version
+                        </a>
+                    <?php endif; ?>
                 </div>
             </div>
         <?php endif; ?>
