@@ -224,8 +224,17 @@ class SiteController extends Controller
         if (!Yii::$app->request->isAjax) {
             return $this->render('admin');
         } else {
+            // Fetch both license + config info in one round-trip so the
+            // admin panel surfaces the running daemon's version, web-root,
+            // pid, and uptime alongside license details.
             $licenseInfo = Yii::$app->daemon->getLicenseInfo();
-            return $this->renderAjax('_licenseInfo', ['licenseInfo' => $licenseInfo]);
+            $configInfo  = Yii::$app->daemon->getConfigInfo();
+            $webAppVer   = Yii::$app->params['version'] ?? '';
+            return $this->renderAjax('_licenseInfo', [
+                'licenseInfo' => $licenseInfo,
+                'configInfo'  => $configInfo,
+                'webAppVer'   => $webAppVer,
+            ]);
         }
     }
 
