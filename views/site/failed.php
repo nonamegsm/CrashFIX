@@ -77,8 +77,41 @@ $session = Yii::$app->session;
     </div>
 <?php endif; ?>
 
+<?php
+// Compute totals up-front so we can render a single unified
+// empty-state card when BOTH grids are empty AND no search is
+// active. Without this the page renders two visually-identical
+// empty-state messages stacked on top of each other, which reads
+// as duplicated content even though they belong to two separate
+// sections.
+$crashCount    = ($crashProvider !== null) ? (int) $crashProvider->getTotalCount() : 0;
+$debugCount    = ($debugProvider !== null) ? (int) $debugProvider->getTotalCount() : 0;
+$noFilters     = ($crashQ === '' && $debugQ === '');
+$bothShown     = ($canCrash && $crashProvider !== null) && ($canDebug && $debugProvider !== null);
+$bothEmpty     = $bothShown && $crashCount === 0 && $debugCount === 0;
+$collapseEmpty = $bothEmpty && $noFilters;
+?>
+
+<?php if ($collapseEmpty): ?>
+    <!-- Unified empty state: both grids are empty AND no search is
+         active, so we collapse the per-section messaging into a
+         single clean confirmation. The grids reappear individually
+         the moment a row matches one of them or the user starts
+         filtering. -->
+    <div class="card border-success">
+        <div class="card-body text-center py-4">
+            <div style="font-size: 32px; line-height: 1; color: #28a745;">&#x2713;</div>
+            <div class="mt-2"><strong>Everything healthy.</strong></div>
+            <div class="text-muted small mt-1">
+                No failed crash reports or debug-info files in this project.
+                Items the daemon could not process will appear here for triage.
+            </div>
+        </div>
+    </div>
+<?php endif; ?>
+
 <!-- ============================== Crash reports ============================== -->
-<?php if ($canCrash && $crashProvider !== null): ?>
+<?php if ($canCrash && $crashProvider !== null && !$collapseEmpty): ?>
     <div class="cf-failed-section">
         <h3>Failed crash reports
             <span class="badge badge-danger"><?= (int) $crashProvider->getTotalCount() ?></span>
@@ -259,7 +292,7 @@ $session = Yii::$app->session;
 <?php endif; ?>
 
 <!-- ============================== Debug-info files ============================== -->
-<?php if ($canDebug && $debugProvider !== null): ?>
+<?php if ($canDebug && $debugProvider !== null && !$collapseEmpty): ?>
     <div class="cf-failed-section">
         <h3>Failed debug-info files
             <span class="badge badge-danger"><?= (int) $debugProvider->getTotalCount() ?></span>
