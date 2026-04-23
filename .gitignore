@@ -45,6 +45,9 @@ tests/_support/_generated
 /web/assets/*
 !/web/assets/.gitignore
 
+# Yii AssetManager may publish under app assets/ alongside tracked *.php bundles
+/assets/*/
+
 # CrashFix file storage (uploaded crash reports, debug symbols, attachments)
 /data/
 
