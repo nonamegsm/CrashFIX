@@ -45,7 +45,10 @@ $session = Yii::$app->session;
 .cf-bulk-bar button[disabled] { opacity: 0.5; cursor: not-allowed; }
 </style>
 
-<h1>Failed Items</h1>
+<?php // The AdminLTE layout already renders $this->title as the page
+      // header (see views/layouts/adminlte/content.php). Adding an H1
+      // here too would show the same title twice. The intro paragraph
+      // is sufficient context. ?>
 <p class="cf-failed-meta">
     Crash reports and debug-info files in the current project that the
     daemon could not process. Each row shows the most recent error
