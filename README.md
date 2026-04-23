@@ -106,6 +106,11 @@ Three files in `config/` drive runtime behaviour:
 The default `db.php` falls back to `mysql:host=127.0.0.1;dbname=crashfix`
 with username `crashfix` if `user_params.ini` is missing.
 
+**Public contact form** (`/site/contact`, CAPTCHA-protected) sends mail to
+`adminEmail` in `params.php`, falling back to `senderEmail` if unset. Configure
+the `mailer` component in `web.php` for real SMTP (or rely on file transport
+in development). A link appears on the login page next to password recovery.
+
 ## Development
 
 ### Tests

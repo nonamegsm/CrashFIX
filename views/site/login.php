@@ -36,7 +36,8 @@ $this->params['breadcrumbs'][] = $this->title;
                         <?= $form->field($model, 'password')->passwordInput(['placeholder' => 'Password']) ?>
                         
                         <div class="mb-3 small">
-                            Forgot password? Click <?= Html::a('here', ['site/recover-password']) ?>.
+                            Forgot password? <?= Html::a('Recover it', ['site/recover-password']) ?>.
+                            Need to reach an administrator? <?= Html::a('Contact', ['site/contact']) ?>.
                         </div>
 
                         <?= $form->field($model, 'rememberMe')->checkbox([
