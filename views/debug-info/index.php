@@ -51,7 +51,7 @@ $myProjects = $user->getMyProjects();
         <div class="col-md-12">
             <form action="<?= Url::to(['debug-info/index']) ?>" method="get" class="row g-3">
                 <div class="col-md-10">
-                    <?= Html::textInput('q', Yii::$app->request->get('q'), ['placeholder' => 'Search by file name/GUID', 'class' => 'form-control']) ?>
+                    <?= Html::textInput('q', Yii::$app->request->get('q'), ['placeholder' => 'Search by file name or build ID', 'class' => 'form-control']) ?>
                 </div>
                 <div class="col-md-2">
                     <?= Html::submitButton('Search', ['class' => 'btn btn-primary w-100']) ?>
@@ -85,6 +85,20 @@ $myProjects = $user->getMyProjects();
                     },
                 ],
                 [
+                    'attribute' => 'format',
+                    'header'    => 'Format',
+                    'value' => function ($data) {
+                        return $data->getFormatStr();
+                    },
+                    'contentOptions' => function ($data) {
+                        $f = (string) ($data->format ?? '');
+                        if ($f === '' || $f === Debuginfo::FORMAT_UNKNOWN) {
+                            return ['class' => 'text-muted fst-italic'];
+                        }
+                        return [];
+                    },
+                ],
+                [
                     'attribute' => 'filesize',
                     'value' => function ($data) {
                         return MiscHelpers::fileSizeToStr($data->filesize);
@@ -96,13 +110,21 @@ $myProjects = $user->getMyProjects();
                         return $data->getStatusStr();
                     },
                     'contentOptions' => function ($data) {
-                        return $data->status == Debuginfo::STATUS_INVALID ? ['class' => 'text-danger'] : [];
+                        $s = (int) $data->status;
+                        if ($s === Debuginfo::STATUS_INVALID || $s === Debuginfo::STATUS_UNSUPPORTED_FORMAT) {
+                            return ['class' => 'text-danger'];
+                        }
+                        if ($s === Debuginfo::STATUS_PARTIALLY_MATCHED) {
+                            return ['class' => 'text-warning'];
+                        }
+                        return [];
                     }
                 ],
                 [
                     'attribute' => 'guid',
+                    'header'    => 'Build ID',
                     'value' => function ($data) {
-                        return (isset($data->guid) && substr($data->guid, 0, 4) != "tmp_") ? $data->guid : "n/a";
+                        return $data->getBuildIdValue();
                     }
                 ],
                 [

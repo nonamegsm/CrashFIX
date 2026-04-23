@@ -14,7 +14,7 @@ class DebuginfoSearch extends Debuginfo
     {
         return [
             [['id', 'project_id', 'status', 'filesize'], 'integer'],
-            [['filename', 'guid', 'md5'], 'safe'],
+            [['filename', 'guid', 'md5', 'format'], 'safe'],
         ];
     }
 
@@ -49,6 +49,7 @@ class DebuginfoSearch extends Debuginfo
             'id'       => $this->id,
             'status'   => $this->status,
             'filesize' => $this->filesize,
+            'format'   => $this->format,
         ]);
 
         $query->andFilterWhere(['like', 'filename', $this->filename])

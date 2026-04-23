@@ -38,6 +38,39 @@ $this->params['breadcrumbs'][] = 'Debug Info File #' . $model->id;
         </div>
     </div>
 
+    <h4 class="mt-3">Symbol Format</h4>
+    <?= DetailView::widget([
+        'model' => $model,
+        'attributes' => [
+            [
+                'attribute' => 'format',
+                'label'     => 'Format',
+                'value'     => $model->getFormatStr(),
+            ],
+            [
+                'attribute' => 'container',
+                'label'     => 'Container',
+                'value'     => $model->container ?: 'unknown',
+            ],
+            [
+                'attribute' => 'architecture',
+                'label'     => 'Architecture',
+                'value'     => $model->architecture ?: 'unknown',
+            ],
+            [
+                'attribute' => 'has_source_lines',
+                'label'     => 'Has source lines',
+                'value'     => $model->getHasSourceLinesStr(),
+            ],
+            [
+                'attribute' => 'guid',
+                'label'     => $model->getBuildIdLabel(),
+                'value'     => $model->getBuildIdValue(),
+            ],
+        ],
+    ]) ?>
+
+    <h4 class="mt-3">File</h4>
     <?= DetailView::widget([
         'model' => $model,
         'attributes' => [
@@ -53,10 +86,6 @@ $this->params['breadcrumbs'][] = 'Debug Info File #' . $model->id;
             [
                 'attribute' => 'filesize',
                 'value' => MiscHelpers::fileSizeToStr($model->filesize),
-            ],
-            [
-                'attribute' => 'guid',
-                'value' => substr($model->guid, 0, 4) != "tmp_" ? $model->guid : "n/a",
             ],
             'md5',
         ],
