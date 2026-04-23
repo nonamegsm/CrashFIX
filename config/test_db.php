@@ -5,9 +5,8 @@
  *
  * Deliberately separated from db.php so unit/functional/acceptance
  * tests never touch the production schema. The connection points at
- * `crashfix_test`, which is created and migrated by `composer test`
- * (or manually via `php yii migrate --interactive=0` after pointing
- * the env at the test DB).
+ * `crashfix_test`. Create the empty database, then run migrations with
+ * `php yii migrate --appconfig=config/console_test.php --interactive=0`.
  */
 return [
     'class'        => 'yii\db\Connection',

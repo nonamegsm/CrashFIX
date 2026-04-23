@@ -122,6 +122,32 @@ vendor/bin/codecept run unit
 vendor/bin/codecept run functional
 ```
 
+On Windows, use `vendor\bin\codecept.bat` (or `php vendor/bin/codecept`).
+
+After adding or changing Codeception modules, run `vendor/bin/codecept build`
+so `tests/_support/_generated` helpers stay in sync (that directory is
+gitignored).
+
+#### Functional tests
+
+Functional tests boot the real Yii app with `config/test.php`. They need:
+
+1. **MySQL database** `crashfix_test` (see `config/test_db.php` for DSN,
+   user, and table prefix). Create the database, then apply migrations:
+
+   ```bash
+   php yii migrate --appconfig=config/console_test.php --interactive=0
+   ```
+
+2. **Web server URL** matching `entryUrl` in `tests/functional.suite.yml`
+   (default `http://localhost/index.php`). The document root for that host
+   must be the `web/` directory so `index.php` is the app front controller.
+   If the app lives under a subdirectory (e.g. XAMPP without a vhost), set
+   `entryUrl` to the full base URL including the path to `web/index.php`.
+
+3. **Install gate** is skipped when `YII_ENV` is `test`, so `installed.txt`
+   is not required for these tests.
+
 ### Daemon
 
 The web app talks to the CrashFix daemon over TCP on `127.0.0.1:50`
