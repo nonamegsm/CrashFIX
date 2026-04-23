@@ -4,7 +4,9 @@ namespace app\controllers;
 
 use Yii;
 use yii\filters\AccessControl;
+use yii\web\BadRequestHttpException;
 use yii\web\Controller;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 use yii\filters\VerbFilter;
 use app\models\LoginForm;
@@ -89,6 +91,27 @@ class SiteController extends Controller
     public function actionIndex()
     {
         return $this->render('index');
+    }
+
+    /**
+     * Static pages under views/site/pages/{view}.php (Yii1 CViewAction parity).
+     *
+     * Pretty URL: /site/page/{view}  Legacy query: /site/page?view={view}
+     */
+    public function actionPage(?string $view = null)
+    {
+        $view = $view ?? (string) Yii::$app->request->get('view', '');
+        $view = trim($view);
+        if ($view === '' || !preg_match('/^[a-zA-Z0-9][a-zA-Z0-9_-]*$/', $view)) {
+            throw new BadRequestHttpException('Missing or invalid page name.');
+        }
+
+        $file = Yii::getAlias('@app/views/site/pages/' . $view . '.php');
+        if (!is_file($file)) {
+            throw new NotFoundHttpException('Page not found.');
+        }
+
+        return $this->render('pages/' . $view);
     }
 
     public function actionLogin($prt = null)

@@ -98,6 +98,8 @@ $config = [
                 // Legacy Yii1 camelCase paths (bookmarks / external links).
                 'extraFiles/<action:\w+>/<id:\d+>' => 'extra-files/<action>',
                 'extraFiles/<action:\w+>' => 'extra-files/<action>',
+                // Static site pages (views/site/pages/{view}.php); must precede generic controller/action rule.
+                'site/page/<view:[\w-]+>' => 'site/page',
                 '<controller:\w+>/<id:\d+>' => '<controller>/view',
                 '<controller:\w+>/<action:\w+>/<id:\d+>' => '<controller>/<action>',
                 '<controller:\w+>/<action:\w+>' => '<controller>/<action>',
