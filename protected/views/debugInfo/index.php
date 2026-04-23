@@ -35,7 +35,7 @@ You have no projects assigned.
 <!-- Simple Search Form -->
 <div class="span-27 last" style="display:<?php echo !$model->isAdvancedSearch?'inherit':'none'?>" id="div_simple_search">
 	<?php echo CHtml::beginForm(array('debugInfo/index'), 'get'); ?>
-	<div class="span-27 last"><p id="stat_filter">Search by file name/GUID or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
+	<div class="span-27 last"><p id="stat_filter">Search by file name or build ID, or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
 	<div class="span-25">
 		<?php echo CHtml::textField('q', isset($model->filter) ? CHtml::encode($model->filter):"", array('id'=>'text_filter')); ?>
 	</div>
@@ -147,6 +147,16 @@ You have no projects assigned.
 			  'type' => 'raw',
 			  'value' => 'CHtml::link($data->filename, \'view/\'.$data->id)',	  			  			  
           ),
+          array(
+              'name'   => 'format',
+              'header' => 'Format',
+              // Renders "PDB" / "DWARF (ELF)" / "DWARF (PE)" / "Unknown" /
+              // "detecting..." per DebugInfo::getFormatStr().
+              'value'  => '$data->getFormatStr()',
+              'cssClassExpression' => '($data->format===null || $data->format===""
+                                          || $data->format===DebugInfo::FORMAT_UNKNOWN)
+                                       ? "column-muted" : ""',
+          ),
 		  array(            // display 'filesize' using a formatted string			  
 			  'header'=>'Size',			  
               'name'=>'filesize',
@@ -160,8 +170,9 @@ You have no projects assigned.
 			  'cssClassExpression' => '$data->status==DebugInfo::STATUS_INVALID?"status-invalid":""',	
           ),
           array(            
-              'name'=>'guid',
-              'value'=>'(isset($data->guid) && substr($data->guid, 0, 4)!="tmp_")?$data->guid:"n/a"',
+              'name'   => 'guid',
+              'header' => 'Build ID',
+              'value'  => '$data->getBuildIdValue()',
           ),
           array(            // display 'dateuploaded' using an expression
               'name'=>'dateuploaded',

@@ -11,9 +11,23 @@ class DebugInfo extends CActiveRecord
 	const STATUS_PENDING_PROCESSING     = 1; // The debug info file is awaiting for processing by daemon.
 	const STATUS_PROCESSING_IN_PROGRESS = 2; // The debug info file is currently being processed by daemon.
 	const STATUS_PROCESSED              = 3; // The debug info file has been processed by daemon and everything is OK.
-	const STATUS_INVALID                = 4; // The debug info file is marked by daemon as an invalid PDB file.
+	const STATUS_INVALID                = 4; // The debug info file is marked by daemon as an invalid file (any format).
     const STATUS_PENDING_DELETE         = 5; // The debug info file is awaiting for deletion.
     const STATUS_DELETE_IN_PROGRESS     = 6; // The debug info file is being deleted.
+
+	// Format-column values the daemon is expected to write back once
+	// RFC-001 (DWARF / GCC support) phase 1 lands. NULL until then.
+	// Kept identical to the Yii2-port constants so a single daemon
+	// build can serve both frontends.
+	const FORMAT_PDB        = 'pdb';
+	const FORMAT_DWARF_ELF  = 'dwarf-elf';
+	const FORMAT_DWARF_PE   = 'dwarf-pe';
+	const FORMAT_UNKNOWN    = 'unknown';
+
+	// build_id_kind values, used only for display label prefixing.
+	const BUILDID_PDB_GUID_AGE = 'pdb-guid-age';
+	const BUILDID_GNU_BUILD_ID = 'gnu-build-id';
+	const BUILDID_PE_GUID_AGE  = 'pe-guid-age';
 			
 	public $project_name; // Project name (used for external upload).
 	public $fileAttachment; // File attachment CUploadedFile	
@@ -54,7 +68,14 @@ class DebugInfo extends CActiveRecord
 			array('guid', 'required', 'on'=>'create, update'),						
 			array('guid', 'checkFileGUIDExists', 'on'=>'create'),
 			array('project_name', 'length', 'max'=>64),									
-			array('fileAttachment', 'file', 'types' => 'pdb', 'maxFiles'=>1, 'minSize'=>1, 'on'=>'create'),
+			// Whitelist intentionally permissive: PDB plus the common
+			// DWARF carriers (.so / .exe / .dll / .debug / .elf) plus
+			// the legacy aliases (.sym / .dbg). Server-side daemon does
+			// the actual format detection and may still mark a file
+			// STATUS_INVALID regardless of extension.
+			array('fileAttachment', 'file',
+				'types' => 'pdb, sym, dbg, so, exe, dll, debug, elf',
+				'maxFiles'=>1, 'minSize'=>1, 'on'=>'create'),
 			array('dateFrom', 'date', 'on'=>'search'),			
 			array('dateTo', 'date', 'on'=>'search'),	
 			array('dateTo', 'compareFromToDates', 'on'=>'search'),			
@@ -454,9 +475,78 @@ class DebugInfo extends CActiveRecord
 			'md5' => 'MD5 Hash',
 			'filename' => 'File Name',	
 			'filesize' => 'File Size',	
-			'guid' => 'GUID+Age',	
+			// Renamed from 'GUID+Age': the same column now stores
+			// either a PDB GUID+Age or a GNU build-id, so the
+			// umbrella label is more accurate. The technically
+			// precise name is rendered as a value prefix in
+			// getBuildIdValue() (see views).
+			'guid'             => 'Build ID',
+			'format'           => 'Format',
+			'container'        => 'Container',
+			'architecture'     => 'Architecture',
+			'has_source_lines' => 'Has source lines',
+			'build_id_kind'    => 'Build ID kind',
 		);
-	}	
+	}
+
+	/**
+	 * Stable user-facing label for the format column. NULL or empty
+	 * renders as "detecting..." so the user sees that the daemon
+	 * has not yet looked at the file (vs. "Unknown" which means
+	 * the daemon ran and could not identify the format).
+	 */
+	public function getFormatStr()
+	{
+		$f = isset($this->format) ? (string)$this->format : '';
+		if($f === '')
+			return 'detecting…';
+		switch($f)
+		{
+			case self::FORMAT_PDB:       return 'PDB';
+			case self::FORMAT_DWARF_ELF: return 'DWARF (ELF)';
+			case self::FORMAT_DWARF_PE:  return 'DWARF (PE)';
+			case self::FORMAT_UNKNOWN:   return 'Unknown';
+		}
+		return $f;
+	}
+
+	/**
+	 * Format-aware label for the Build ID detail row.
+	 */
+	public function getBuildIdLabel()
+	{
+		return 'Build identifier';
+	}
+
+	/**
+	 * Composes "<kind-prefix>: <guid>" so the user always sees the
+	 * technically precise name of what the GUID column holds.
+	 * Returns "n/a" if the daemon hasn't assigned a real GUID yet.
+	 */
+	public function getBuildIdValue()
+	{
+		$guid = isset($this->guid) ? (string)$this->guid : '';
+		if($guid === '' || strncmp($guid, 'tmp_', 4) === 0)
+			return 'n/a';
+		$kind = isset($this->build_id_kind) ? (string)$this->build_id_kind : '';
+		switch($kind)
+		{
+			case self::BUILDID_PDB_GUID_AGE: return 'PDB GUID+Age: '   . $guid;
+			case self::BUILDID_GNU_BUILD_ID: return 'GNU build-id: '   . $guid;
+			case self::BUILDID_PE_GUID_AGE:  return 'PE GUID+Age: '    . $guid;
+		}
+		return $guid;
+	}
+
+	/**
+	 * Yes / No / unknown helper for has_source_lines.
+	 */
+	public function getHasSourceLinesStr()
+	{
+		if(!isset($this->has_source_lines) || $this->has_source_lines === null || $this->has_source_lines === '')
+			return 'unknown';
+		return ((int)$this->has_source_lines) === 1 ? 'yes' : 'no';
+	}
 	
 	/**
 	 * Retrieves a list of models based on the current search/filter conditions.

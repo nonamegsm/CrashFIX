@@ -40,6 +40,45 @@ if(count($processingErrors)>0):
 
 <!-- Detail View -->
 <div class="span-18 last">
+
+<h4 style="margin-top: 14px;">Symbol Format</h4>
+<?php $this->widget('zii.widgets.CDetailView', array(
+	'data'=>$model,
+	'attributes'=>array(
+		array(
+			'name'  => 'format',
+			'label' => 'Format',
+			'type'  => 'text',
+			'value' => $model->getFormatStr(),
+		),
+		array(
+			'name'  => 'container',
+			'label' => 'Container',
+			'type'  => 'text',
+			'value' => isset($model->container) && $model->container!=='' ? $model->container : 'unknown',
+		),
+		array(
+			'name'  => 'architecture',
+			'label' => 'Architecture',
+			'type'  => 'text',
+			'value' => isset($model->architecture) && $model->architecture!=='' ? $model->architecture : 'unknown',
+		),
+		array(
+			'name'  => 'has_source_lines',
+			'label' => 'Has source lines',
+			'type'  => 'text',
+			'value' => $model->getHasSourceLinesStr(),
+		),
+		array(
+			'name'  => 'guid',
+			'label' => $model->getBuildIdLabel(),
+			'type'  => 'text',
+			'value' => $model->getBuildIdValue(),
+		),
+	),
+	));?>
+
+<h4 style="margin-top: 14px;">File</h4>
 <?php $this->widget('zii.widgets.CDetailView', array(
 	'data'=>$model,
 	'attributes'=>array(		
@@ -58,11 +97,6 @@ if(count($processingErrors)>0):
             'name'=>'filesize',
             'type'=>'raw',
             'value'=>CHtml::encode(MiscHelpers::fileSizeToStr($model->filesize)),
-        ),
-		array(  
-            'name'=>'guid',
-            'type'=>'text',
-            'value'=>substr($model->guid, 0, 4)!="tmp_"?$model->guid:"n/a",
         ),
 		'md5',				
 	),

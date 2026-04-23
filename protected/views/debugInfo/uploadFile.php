@@ -31,8 +31,15 @@ $this->breadcrumbs=array(
 <?php 
 	if($submitted && !$model->hasErrors())
 	{
-		echo "<p>File <em>".$model->fileAttachment->getName()."</em> uploaded successfully.</p>";
+		$fname = CHtml::encode($model->fileAttachment->getName());
+		echo "<div class=\"flash-success\">";
+		echo "<p><strong>File <em>$fname</em> uploaded successfully.</strong></p>";
+		echo "<p style=\"font-style:italic; color:#555; margin:4px 0;\">Detected format: ";
+		echo CHtml::encode($model->getFormatStr());
+		echo "</p>";
+		echo "<p style=\"margin:4px 0;\">Status: queued for processing.</p>";
 		echo "<p>Upload another file?</p>";
+		echo "</div>";
 	}
 		
 ?>
@@ -53,6 +60,11 @@ $this->breadcrumbs=array(
 		<?php echo $form->label($model, 'fileAttachment'); ?>
 		<?php echo $form->fileField($model,'fileAttachment'); ?>
 		<?php echo $form->error($model, 'fileAttachment'); ?>
+		<p class="hint" style="font-size: 11px; color: #666; margin-top: 4px;">
+			Supported formats: PDB, DWARF in ELF (.so / .debug),
+			DWARF in PE (.exe / .dll), stripped .debug companion files.
+			Format detection runs server-side after upload.
+		</p>
 	</div>
 
 	<div class="row buttons">
