@@ -166,11 +166,27 @@ $.ajax({
         return 'danger';
     }
 
+    function fmtPct(p) {
+        // Render a number as a percentage with one decimal, or "n/a"
+        // when the underlying total was zero (so we don't lie with 0%).
+        return (p === null || p === undefined) ? 'n/a' : (p + '%');
+    }
+
+    function fmtNum(n) {
+        // Thousands separator for the lifetime totals - "12,456 of
+        // 13,229 done" reads better than "12456 of 13229 done".
+        return (n === null || n === undefined) ? '0'
+            : String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    }
+
     function renderSummary(d) {
         var t  = d.throughput;
         var lh = d.last_hour;
+        var cl = d.crash_lifetime || {};
         var sclass = classifySuccess(lh.success_pct);
-        var pctText = (lh.success_pct === null) ? 'n/a' : (lh.success_pct + '%');
+        var pclass = classifySuccess(cl.processed_pct);
+        var pctText = fmtPct(lh.success_pct);
+        var processedPctText = fmtPct(cl.processed_pct);
         var inFlightClass = lh.in_flight > 0 ? 'info' : 'muted';
 
         return [
@@ -198,6 +214,17 @@ $.ajax({
             '  <div class="cf-stat-label">Success rate (1h)</div>',
             '  <div class="cf-stat-value">' + pctText + '</div>',
             '  <div class="cf-stat-sub">' + lh.succeeded + ' ok / ' + lh.failed + ' failed</div>',
+            '</div>',
+            // Lifetime processing progress. Counts every crash report
+            // ever uploaded; "Processed" = STATUS_PROCESSED (3).
+            // Subline shows absolute counts and the "still pending"
+            // remainder so admins can tell at a glance if the daemon
+            // is keeping up with intake.
+            '<div class="cf-stat-card ' + pclass + '">',
+            '  <div class="cf-stat-label">Processed (lifetime)</div>',
+            '  <div class="cf-stat-value">' + processedPctText + '</div>',
+            '  <div class="cf-stat-sub">' + fmtNum(cl.processed) + ' of ' + fmtNum(cl.total) +
+                  ' (<span title="reports not yet in a terminal state">' + fmtNum(cl.pending) + ' pending</span>)</div>',
             '</div>'
         ].join('');
     }

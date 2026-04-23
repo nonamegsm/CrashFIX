@@ -448,6 +448,33 @@ class SiteController extends Controller
 			}
 		}
 
+		// Lifetime crash-report processing progress.
+		// 'Processed' = CrashReport.STATUS_PROCESSED (3) - the daemon
+		// successfully resolved the stack frames. 'Done' includes
+		// STATUS_INVALID (4) too because that's a terminal state -
+		// we know the daemon won't re-touch it without an explicit
+		// retry. The percentage answers "how much of the queue have
+		// we worked through?" - useful while a backlog is draining.
+		$crashCounts = $db->createCommand(
+			"SELECT
+				COUNT(*) AS total,
+				SUM(CASE WHEN status = :s_processed THEN 1 ELSE 0 END) AS processed,
+				SUM(CASE WHEN status IN (:s_processed, :s_invalid) THEN 1 ELSE 0 END) AS done
+			 FROM {{crashreport}}"
+		)->queryRow(true, array(
+			':s_processed' => CrashReport::STATUS_PROCESSED,
+			':s_invalid'   => CrashReport::STATUS_INVALID,
+		));
+		$crashTotal     = (int)($crashCounts['total']     ?? 0);
+		$crashProcessed = (int)($crashCounts['processed'] ?? 0);
+		$crashDone      = (int)($crashCounts['done']      ?? 0);
+		$processedPct   = $crashTotal > 0
+			? round(100.0 * $crashProcessed / $crashTotal, 1)
+			: null;
+		$donePct        = $crashTotal > 0
+			? round(100.0 * $crashDone / $crashTotal, 1)
+			: null;
+
 		// What is the daemon doing RIGHT NOW (currently STARTED)
 		$runningRows = $db->createCommand(
 			"SELECT id, cmdid, optype, timestamp, operand1
@@ -516,6 +543,17 @@ class SiteController extends Controller
 				'failed'      => $statusMix['failed'],
 				'in_flight'   => $statusMix['started'],
 				'success_pct' => $succRate,
+			),
+			// Lifetime processing progress across the whole crash-
+			// report population. Drives the new "Processed" card on
+			// the runtime panel and lets admins watch a backlog drain.
+			'crash_lifetime' => array(
+				'total'         => $crashTotal,
+				'processed'     => $crashProcessed,
+				'done'          => $crashDone,         // PROCESSED + INVALID
+				'processed_pct' => $processedPct,      // null when total = 0
+				'done_pct'      => $donePct,
+				'pending'       => max(0, $crashTotal - $crashDone),
 			),
 			'by_type'         => $byType,
 			'running'         => $running,
