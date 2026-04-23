@@ -92,6 +92,7 @@
                             ['label' => 'Projects', 'url' => ['/project/index'], 'icon' => 'project-diagram'],
                             ['label' => 'Daemon', 'url' => ['/site/daemon'], 'icon' => 'server'],
                             ['label' => 'Mail', 'url' => ['/mail/index'], 'icon' => 'envelope'],
+                            ['label' => 'Yii1 migration export', 'url' => ['/site/migration-export'], 'icon' => 'database'],
                         ]
                     ],
                 ],

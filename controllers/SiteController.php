@@ -18,6 +18,7 @@ use app\models\Crashreport;
 use app\models\Debuginfo;
 use app\models\Processingerror;
 use app\components\MiscHelpers;
+use app\components\MysqlDumpExporter;
 use yii\data\ActiveDataProvider;
 
 class SiteController extends Controller
@@ -48,7 +49,8 @@ class SiteController extends Controller
                 'class' => AccessControl::class,
                 'only' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
                            'admin', 'daemon', 'daemon-status', 'daemon-runtime-stats',
-                           'failed', 'failed-retry', 'failed-delete'],
+                           'failed', 'failed-retry', 'failed-delete',
+                           'migration-export', 'migration-export-download'],
                 'rules' => [
                     [
                         'actions' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
@@ -57,7 +59,8 @@ class SiteController extends Controller
                         'roles' => ['@'],
                     ],
                     [
-                        'actions' => ['admin', 'daemon', 'daemon-status', 'daemon-runtime-stats'],
+                        'actions' => ['admin', 'daemon', 'daemon-status', 'daemon-runtime-stats',
+                            'migration-export', 'migration-export-download'],
                         'allow' => true,
                         'roles' => ['gperm_access_admin_panel'],
                     ],
@@ -69,6 +72,7 @@ class SiteController extends Controller
                     'logout' => ['post'],
                     'failed-retry'  => ['post'],
                     'failed-delete' => ['post'],
+                    'migration-export-download' => ['post'],
                 ],
             ],
         ];
@@ -276,6 +280,49 @@ class SiteController extends Controller
         }
 
         return $this->render('recoverPassword', ['model' => $model]);
+    }
+
+    /**
+     * Full SQL dump of the configured database (for Yii1 → Yii2 migration or cold backup).
+     */
+    public function actionMigrationExport()
+    {
+        $this->sidebarActiveItem = 'Administer';
+        $this->adminMenuItem = 'Migration export';
+
+        return $this->render('migration-export');
+    }
+
+    /**
+     * POST: stream a .sql file generated with mysqldump.
+     */
+    public function actionMigrationExportDownload()
+    {
+        if (YII_ENV === 'test') {
+            throw new NotFoundHttpException('Not available in test environment.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'cf_migrate') . '.sql';
+        $result = MysqlDumpExporter::dumpToFile(Yii::$app->db, $tmp);
+
+        if (!$result['ok']) {
+            @unlink($tmp);
+            Yii::$app->session->setFlash(
+                'error',
+                $result['stderr'] !== ''
+                    ? $result['stderr']
+                    : ('mysqldump exited with code ' . $result['exitCode'])
+            );
+
+            return $this->redirect(['migration-export']);
+        }
+
+        $base = 'crashfix-migration-' . preg_replace('/[^0-9_-]+/', '-', date('Y-m-d_His')) . '.sql';
+
+        return Yii::$app->response->sendFile($tmp, $base, [
+            'mimeType' => 'application/octet-stream',
+            'destroyFile' => true,
+        ]);
     }
 
     public function actionAdmin()

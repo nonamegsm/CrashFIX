@@ -25,6 +25,7 @@ class AdminMenu extends Widget
                 ['label' => 'Projects', 'url' => ['project/index'], 'active' => $this->activeItem == 'Projects'],
                 ['label' => 'Daemon', 'url' => ['site/daemon'], 'active' => $this->activeItem == 'Daemon'],
                 ['label' => 'Mail', 'url' => ['mail/index'], 'active' => $this->activeItem == 'Mail'],
+                ['label' => 'Yii1 migration export', 'url' => ['site/migration-export'], 'active' => $this->activeItem == 'Migration export'],
             ],
         ]);
         
