@@ -48,36 +48,52 @@ class m260423_000002_convert_to_utf8mb4 extends Migration
             "ALTER DATABASE `{$dbName}` CHARACTER SET = {$target} COLLATE = {$coll}"
         );
 
-        $sql = "
-            SELECT t.TABLE_NAME, ccsa.CHARACTER_SET_NAME
-              FROM information_schema.TABLES t
-              JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa
-                ON ccsa.COLLATION_NAME = t.TABLE_COLLATION
-             WHERE t.TABLE_SCHEMA = :db
-               AND t.TABLE_TYPE   = 'BASE TABLE'
-               AND t.TABLE_NAME LIKE :pfx
-        ";
-        $rows = $this->db->createCommand($sql, [
-            ':db'  => $dbName,
-            ':pfx' => $prefix . '%',
-        ])->queryAll();
+        // Disable FK checks for the duration of the walk - see the
+        // sibling Yii1 migration (php8-compat branch) for the full
+        // rationale. tl;dr: ALTER TABLE ... CONVERT TO CHARACTER SET
+        // refuses to touch a column referenced by an FK, so we have
+        // to take both sides of every constraint to utf8mb4 with
+        // checks off and re-enable once the walk is done.
+        //
+        // try / finally is mandatory: if an ALTER throws mid-walk we
+        // MUST re-enable checks before propagating the exception,
+        // otherwise the next query on this connection would silently
+        // bypass referential integrity.
+        $this->execute("SET FOREIGN_KEY_CHECKS = 0");
+        try {
+            $sql = "
+                SELECT t.TABLE_NAME, ccsa.CHARACTER_SET_NAME
+                  FROM information_schema.TABLES t
+                  JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa
+                    ON ccsa.COLLATION_NAME = t.TABLE_COLLATION
+                 WHERE t.TABLE_SCHEMA = :db
+                   AND t.TABLE_TYPE   = 'BASE TABLE'
+                   AND t.TABLE_NAME LIKE :pfx
+            ";
+            $rows = $this->db->createCommand($sql, [
+                ':db'  => $dbName,
+                ':pfx' => $prefix . '%',
+            ])->queryAll();
 
-        $converted = 0;
-        $skipped   = 0;
-        foreach ($rows as $r) {
-            if ($r['CHARACTER_SET_NAME'] === $target) {
-                $skipped++;
-                continue;
+            $converted = 0;
+            $skipped   = 0;
+            foreach ($rows as $r) {
+                if ($r['CHARACTER_SET_NAME'] === $target) {
+                    $skipped++;
+                    continue;
+                }
+                echo "    converting {$r['TABLE_NAME']} ({$r['CHARACTER_SET_NAME']} -> {$target})\n";
+                $this->execute(
+                    "ALTER TABLE `{$r['TABLE_NAME']}`
+                        CONVERT TO CHARACTER SET {$target} COLLATE {$coll}"
+                );
+                $converted++;
             }
-            echo "    converting {$r['TABLE_NAME']} ({$r['CHARACTER_SET_NAME']} -> {$target})\n";
-            $this->execute(
-                "ALTER TABLE `{$r['TABLE_NAME']}`
-                    CONVERT TO CHARACTER SET {$target} COLLATE {$coll}"
-            );
-            $converted++;
-        }
 
-        echo "  done: {$converted} converted, {$skipped} already-utf8mb4\n";
+            echo "  done: {$converted} converted, {$skipped} already-utf8mb4\n";
+        } finally {
+            $this->execute("SET FOREIGN_KEY_CHECKS = 1");
+        }
     }
 
     public function safeDown()
