@@ -181,7 +181,12 @@ class InstallController extends Controller
 
     public function actionMigrate()
     {
-        $profile = Yii::$app->session->get(self::SESSION_PROFILE, 'fresh');
+        $iniPath = Yii::getAlias('@app/config/user_params.ini');
+        if (!is_file($iniPath)) {
+            return $this->redirect(['db-config']);
+        }
+
+        $profile = $this->getInstallerProfile();
 
         return $this->render('migrate', [
             'existingYii1' => ($profile === 'existing_yii1'),
@@ -192,7 +197,14 @@ class InstallController extends Controller
     {
         Yii::$app->response->format = Response::FORMAT_JSON;
 
-        $legacyAdopt = Yii::$app->session->get(self::SESSION_PROFILE) === 'existing_yii1'
+        if (!is_file(Yii::getAlias('@app/config/user_params.ini'))) {
+            return [
+                'success' => false,
+                'message' => 'Database is not configured yet. Go back and save connection settings first.',
+            ];
+        }
+
+        $legacyAdopt = $this->getInstallerProfile() === 'existing_yii1'
             && (bool) Yii::$app->request->post('legacy_adopt', true);
 
         try {
@@ -220,10 +232,14 @@ class InstallController extends Controller
 
     public function actionCreateAdmin()
     {
+        if (!is_file(Yii::getAlias('@app/config/user_params.ini'))) {
+            return $this->redirect(['db-config']);
+        }
+
         $model = new User();
         $model->scenario = 'default';
 
-        $allowSkip = Yii::$app->session->get(self::SESSION_PROFILE) === 'existing_yii1';
+        $allowSkip = $this->getInstallerProfile() === 'existing_yii1';
 
         if ($model->load(Yii::$app->request->post())) {
             $adminGroup = Usergroup::findOne(['name' => 'Admin']);
@@ -254,7 +270,7 @@ class InstallController extends Controller
      */
     public function actionSkipAdmin()
     {
-        if (Yii::$app->session->get(self::SESSION_PROFILE) !== 'existing_yii1') {
+        if ($this->getInstallerProfile() !== 'existing_yii1') {
             return $this->redirect(['create-admin']);
         }
 
@@ -280,6 +296,24 @@ class InstallController extends Controller
     // ------------------------------------------------------------------
     // Helpers
     // ------------------------------------------------------------------
+
+    /**
+     * Session is authoritative during a single wizard pass; if it expires,
+     * infer Yii1 adoption from `user_params.ini` so migrate / skip-admin still work.
+     */
+    private function getInstallerProfile(): string
+    {
+        $fromSession = Yii::$app->session->get(self::SESSION_PROFILE);
+        if ($fromSession === 'existing_yii1' || $fromSession === 'fresh') {
+            return $fromSession;
+        }
+
+        $ini = UserParamsIni::readFlat(Yii::getAlias('@app/config/user_params.ini'));
+
+        return (($ini['storage_layout'] ?? '') === UserParamsIni::STORAGE_LAYOUT_LEGACY)
+            ? 'existing_yii1'
+            : 'fresh';
+    }
 
     /**
      * @return string[] versions of newly-applied migrations (values may include " (adopted)" suffix)

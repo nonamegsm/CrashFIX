@@ -83,6 +83,22 @@ block from Option B and change it:
 
 That's it. No other code change.
 
+### 2a. First-time Yii2 setup instead of hand-editing `web.php`
+
+If this server has **not** been marked installed yet (`config/installed.txt`
+missing), use the web wizard at `/install/index`. Choose **Existing CrashFix
+(Yii1)**, enter the same MySQL database as the legacy app, and set the **legacy
+data directory** to the old `protected/data` path. The installer writes
+`config/user_params.ini` with a `[storage]` section (`storage_layout`,
+`storage_base_path`), and both `config/web.php` and `config/console.php` load
+`config/storage.php`, which switches to `LegacyStorage` automatically — no
+diff against `web.php` is required.
+
+If the app is **already** installed and you only want to repoint storage,
+either re-run the wizard with `?force=1` on the install URLs (development /
+staging) or edit `user_params.ini` by hand to match the snippet in the
+installer’s on-screen help, then reload PHP.
+
 ### 3. Reload PHP-FPM / Apache to pick up the new class
 
 ```bash
