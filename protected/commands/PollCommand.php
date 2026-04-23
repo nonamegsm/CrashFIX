@@ -224,6 +224,18 @@ class PollCommand extends CConsoleCommand
 				}
 				else
 				{
+					// RFC-001 Phase 1: even when the daemon returns a
+					// non-zero status (e.g. it detected a non-PDB file
+					// like a TDM-GCC .exe with embedded DWARF), the
+					// XML still carries Format/Container/Architecture/
+					// BuildIdKind metadata. Persist that metadata so
+					// the web UI shows the user what was detected,
+					// then fall through to the normal failure path
+					// (operation marked Failed, debuginfo row marked
+					// Invalid via the existing processingError flow).
+					$this->updateDebugInfoMetadataFromXml(
+						$op->operand2, $op->srcid);
+
 					// Associate a processing error with debug info record
 					$this->addProcessingError(
 						ProcessingError::TYPE_DEBUG_INFO_ERROR, 
@@ -295,7 +307,19 @@ class PollCommand extends CConsoleCommand
 		
 			// Set status attribute.
 			$debugInfo->status = DebugInfo::STATUS_PROCESSED;
-					
+
+			// RFC-001 Phase 1: copy detector metadata into the new
+			// columns. These elements are only present when the
+			// daemon is at LIBDUMPER_VER_BUILD >= 6 (1.0.6-yii2port3
+			// and later); on older daemons isset() returns false and
+			// the columns stay NULL, which the views render as
+			// "detecting...". Note: schema columns may also be missing
+			// if the migration mYYMMDD_debuginfo_add_format_columns
+			// has not yet been applied -- in that case the property
+			// access is silently absorbed by Yii1's CActiveRecord
+			// dynamic-attribute behaviour and no column is set.
+			$this->copyDetectorMetadataFromXml($elemSummary, $debugInfo);
+
 			// Update DebugInfo table record
 			if(!$debugInfo->save())
 				throw new Exception('Error saving debug info AR to database.');
@@ -323,8 +347,79 @@ class PollCommand extends CConsoleCommand
 		}
 						
 		return $status;
-	}	
-	
+	}
+
+	/**
+	 * RFC-001 Phase 1 helper. Extracts the format-detector metadata
+	 * that the daemon now writes into the ImportPdb XML output
+	 * (Format / Container / Architecture / BuildIdKind elements)
+	 * and copies it onto the supplied DebugInfo AR object. Caller is
+	 * responsible for save().
+	 *
+	 * Defensive against:
+	 *   * older daemons that don't emit the new tags (isset() false)
+	 *   * schema migration not applied yet (Yii1 dynamic attributes
+	 *     accept the assignment but it has no effect at save time)
+	 *   * missing build_id_kind on PDB-positive paths (we infer
+	 *     "pdb-guid-age" since the existing code populates GUID+Age)
+	 */
+	private function copyDetectorMetadataFromXml($elemSummary, $debugInfo)
+	{
+		if($elemSummary === null || $debugInfo === null)
+			return;
+
+		$fmt   = isset($elemSummary->Format)       ? (string)$elemSummary->Format       : '';
+		$cont  = isset($elemSummary->Container)    ? (string)$elemSummary->Container    : '';
+		$arch  = isset($elemSummary->Architecture) ? (string)$elemSummary->Architecture : '';
+		$kind  = isset($elemSummary->BuildIdKind)  ? (string)$elemSummary->BuildIdKind  : '';
+
+		// PDB-positive default: when the existing GUID/Age path ran
+		// successfully but a pre-1.0.6 daemon didn't write Format,
+		// we know it's a PDB.
+		if($fmt === '')  $fmt  = DebugInfo::FORMAT_PDB;
+		if($cont === '') $cont = 'pdb';
+		if($kind === '') $kind = DebugInfo::BUILDID_PDB_GUID_AGE;
+
+		$debugInfo->format        = $fmt !== '' ? $fmt  : null;
+		$debugInfo->container     = $cont!== '' ? $cont : null;
+		$debugInfo->architecture  = $arch!== '' ? $arch : null;
+		$debugInfo->build_id_kind = $kind!== '' ? $kind : null;
+
+		// has_source_lines stays NULL until phase 1.1 which actually
+		// walks .debug_line.
+	}
+
+	/**
+	 * RFC-001 Phase 1 helper. Used on the daemon-error path (status
+	 * was non-zero, e.g. file detected as DWARF instead of PDB).
+	 * Loads the row, copies the metadata from XML, and saves only
+	 * the metadata columns -- does NOT touch status/guid which the
+	 * caller's existing failure-handling flow controls.
+	 *
+	 * Quietly no-ops on any I/O or parse failure.
+	 */
+	private function updateDebugInfoMetadataFromXml($xmlFileName, $debugInfoId)
+	{
+		if(empty($xmlFileName) || !is_file($xmlFileName))
+			return;
+		$debugInfo = DebugInfo::model()->find('id='.(int)$debugInfoId);
+		if($debugInfo === null)
+			return;
+		$doc = @simplexml_load_file($xmlFileName);
+		if($doc === false || $doc === null || $doc->Summary === null)
+			return;
+		$this->copyDetectorMetadataFromXml($doc->Summary, $debugInfo);
+		// save(false) skips validation; we only touch columns we
+		// just assigned, and we do not want to fire validators that
+		// might reject empty md5 etc.
+		try {
+			$debugInfo->save(false, array(
+				'format', 'container', 'architecture', 'build_id_kind'));
+		} catch(Exception $e) {
+			Yii::log('updateDebugInfoMetadataFromXml: save failed: '.$e->getMessage(), 'warning');
+		}
+	}
+
 	/**
 	 *  This method looks for crash report files uploaded recently and passes them
 	 *  to daemon for processing. 
