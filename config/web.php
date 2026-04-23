@@ -89,6 +89,9 @@ $config = [
             'enablePrettyUrl' => true,
             'showScriptName' => false,
             'rules' => [
+                // Legacy Yii1 camelCase paths (bookmarks / external links).
+                'extraFiles/<action:\w+>/<id:\d+>' => 'extra-files/<action>',
+                'extraFiles/<action:\w+>' => 'extra-files/<action>',
                 '<controller:\w+>/<id:\d+>' => '<controller>/view',
                 '<controller:\w+>/<action:\w+>/<id:\d+>' => '<controller>/<action>',
                 '<controller:\w+>/<action:\w+>' => '<controller>/<action>',

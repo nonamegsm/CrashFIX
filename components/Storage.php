@@ -93,6 +93,25 @@ class Storage extends Component
         ]);
     }
 
+    /**
+     * Working directory for an "extra files" ZIP build (mirrors legacy
+     * protected/data/extraFiles/{name}_{id}/).
+     */
+    public function extraFilesCollectionWorkDir(string $collectionName, int $collectionId): string
+    {
+        $leaf = $this->sanitiseExtraFilesBaseName($collectionName) . '_' . $collectionId;
+        return $this->safeJoin(['extraFiles', $leaf]);
+    }
+
+    /**
+     * Final ZIP path for an extra-files collection.
+     */
+    public function extraFilesCollectionZipPath(string $collectionName, int $collectionId): string
+    {
+        $leaf = $this->sanitiseExtraFilesBaseName($collectionName) . '_' . $collectionId . '.zip';
+        return $this->safeJoin(['extraFiles', $leaf]);
+    }
+
     // ------------------------------------------------------------------
     // Read / write primitives
     // ------------------------------------------------------------------
@@ -312,6 +331,20 @@ class Storage extends Component
         $name = preg_replace('/[^A-Za-z0-9._\-]/', '_', $name) ?? '';
         if ($name === '' || $name === '.' || $name === '..') {
             $name = 'file';
+        }
+        return $name;
+    }
+
+    /**
+     * Reduce a collection base name (project + date range) to a single
+     * safe path segment for extraFiles/* storage.
+     */
+    protected function sanitiseExtraFilesBaseName(string $name): string
+    {
+        $name = str_replace("\0", '', $name);
+        $name = preg_replace('/[^A-Za-z0-9._\-]/', '_', $name) ?? '';
+        if ($name === '' || $name === '.' || $name === '..') {
+            return 'collection';
         }
         return $name;
     }

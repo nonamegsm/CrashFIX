@@ -72,6 +72,12 @@
                         // (read-only) box / card serial aggregation.
                         'visible' => Yii::$app->user->can('pperm_browse_some_crash_reports'),
                     ],
+                    [
+                        'label' => 'Extra Files',
+                        'url' => ['/extra-files/index'],
+                        'icon' => 'file-archive',
+                        'visible' => Yii::$app->user->can('gperm_access_admin_panel'),
+                    ],
 
                     ['label' => 'ADMINISTRATION', 'header' => true, 'visible' => Yii::$app->user->can('gperm_access_admin_panel')],
                     [
