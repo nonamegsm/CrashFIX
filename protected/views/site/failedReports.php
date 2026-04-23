@@ -78,8 +78,33 @@ $returnTo  = $req->requestUri;
     <div class="flash-notice">Select a project (top of any data page) before browsing failed items.</div>
 <?php endif; ?>
 
+<?php
+// When BOTH grids are visible AND empty AND no search filter is active,
+// collapse the per-section empty messaging into a single confirmation.
+// Without this the page renders two visually-identical empty-state
+// blocks ('No failed crash reports' / 'No failed debug-info files'),
+// which reads as duplicated content.
+$noFilters     = ($crashQ === '' && $debugQ === '');
+$bothShown     = ($canCrash && $crashProvider !== null) && ($canDebug && $debugProvider !== null);
+$bothEmpty     = $bothShown && (int)$crashTotal === 0 && (int)$debugTotal === 0;
+$collapseEmpty = $bothEmpty && $noFilters;
+?>
+
+<?php if($collapseEmpty): ?>
+    <div class="cf-failed-section span-26 last"
+         style="text-align:center; padding:20px 14px; border:1px solid #b6dfb1;
+                background:#dff0d8; color:#2c662d; border-radius:6px;">
+        <div style="font-size:32px; line-height:1;">&#x2713;</div>
+        <div style="margin-top:8px;"><strong>Everything healthy.</strong></div>
+        <div style="font-size:11px; color:#5a7a5a; margin-top:4px;">
+            No failed crash reports or debug-info files in this project.
+            Items the daemon could not process will appear here for triage.
+        </div>
+    </div>
+<?php endif; ?>
+
 <!-- ============================== Crash reports ============================== -->
-<?php if($canCrash && $crashProvider !== null): ?>
+<?php if($canCrash && $crashProvider !== null && !$collapseEmpty): ?>
     <div class="cf-failed-section span-26 last">
         <h3>Failed crash reports
             <span style="color:#a00;">(<?php echo (int)$crashTotal; ?>)</span>
@@ -243,7 +268,7 @@ $returnTo  = $req->requestUri;
 <?php endif; ?>
 
 <!-- ============================== Debug-info files ============================== -->
-<?php if($canDebug && $debugProvider !== null): ?>
+<?php if($canDebug && $debugProvider !== null && !$collapseEmpty): ?>
     <div class="cf-failed-section span-26 last">
         <h3>Failed debug-info files
             <span style="color:#a00;">(<?php echo (int)$debugTotal; ?>)</span>
