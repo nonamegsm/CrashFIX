@@ -17,7 +17,12 @@ use app\components\MiscHelpers;
 use app\models\Debuginfo;
 
 $this->title = Yii::$app->name . ' - Failed Items';
-$this->params['breadcrumbs'][] = 'Failed Items';
+// Intentionally NOT adding 'Failed Items' to breadcrumbs: the
+// AdminLTE layout (views/layouts/adminlte/content.php) renders
+// $this->title as the page H1 in the left column AND breadcrumbs
+// in the right column. Adding 'Failed Items' to breadcrumbs would
+// surface the same string twice on the same row. The "Home" crumb
+// alone is sufficient as the back-link.
 
 $session = Yii::$app->session;
 ?>
