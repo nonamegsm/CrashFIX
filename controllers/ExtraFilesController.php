@@ -165,7 +165,7 @@ class ExtraFilesController extends Controller
         return $this->redirect(['view', 'id' => $extra->id]);
     }
 
-    public function actionCreate($date_from, $date_to)
+    public function actionCreate($date_from = '', $date_to = '')
     {
         $this->checkAuthorization(null);
 
