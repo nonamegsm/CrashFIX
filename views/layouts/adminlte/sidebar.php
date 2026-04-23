@@ -63,6 +63,15 @@
                                Yii::$app->user->can('pperm_browse_some_crash_reports')
                             || Yii::$app->user->can('pperm_browse_some_debug_info'),
                     ],
+                    [
+                        'label' => 'Serials Info',
+                        'url' => ['/serials-info/index'],
+                        'icon' => 'barcode',
+                        // Same gate as the Yii1 sidebar entry: anyone who
+                        // can browse some crash reports can see the
+                        // (read-only) box / card serial aggregation.
+                        'visible' => Yii::$app->user->can('pperm_browse_some_crash_reports'),
+                    ],
 
                     ['label' => 'ADMINISTRATION', 'header' => true, 'visible' => Yii::$app->user->can('gperm_access_admin_panel')],
                     [
