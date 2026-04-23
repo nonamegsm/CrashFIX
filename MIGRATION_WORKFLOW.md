@@ -1,5 +1,7 @@
 # CrashFix: Yii1 → Yii2 Migration Workflow
 
+**Last codebase audit:** 2026-04-23 (this document was refreshed against the `yii2-port` tree).
+
 ## Project Overview
 
 **CrashFix** is a crash report collection and management server (Windows minidumps / CrashRpt-style). It handles crash report upload, processing, grouping, bug tracking, debug symbol management, project/user management, and a background daemon for report processing.
@@ -8,49 +10,51 @@
 
 ## Codebase Audit Summary
 
-### Current State
+### Current State (approximate counts)
 
-| Area | Yii2 (Modern) | Yii1 (Legacy) | Status |
-|------|---------------|----------------|--------|
-| **Controllers** | 10 | 9 (+1 Install new) | ~85% ported |
-| **Models** | 31 | 28 | ~90% ported |
-| **Views** | 61 | 78 | ~70% ported |
-| **Components** | 4 | 7 | ~60% ported |
-| **Widgets** | 3 | 2 (portlets) | Replaced with AdminLTE |
+| Area | Yii2 (this repo) | Notes |
+|------|------------------|--------|
+| **Web controllers** | 12 | Bug, CrashGroup, CrashReport, DebugInfo, ExtraFiles, Install, Mail, Project, SerialsInfo, Site, User, UserGroup |
+| **Console** | Poll, Mail (+ template `Hello`) | `php yii poll/run` drives daemon parity via `PollService` |
+| **Models & forms** | 45 `.php` files under `models/` | Includes ActiveRecord, `*Search`, `*Form`, traits (`CrashreportPollTrait`, `DebuginfoPollTrait`) |
+| **Views** | 77+ `.php` files under `views/` | Kebab-case paths (`crash-report`, `debug-info`, …) |
+| **Migrations** | 15 | Under `migrations/`; installer also runs them from the web UI |
+| **Components** | 10 | Daemon, Storage, LegacyStorage, BatchImporter, WebUser, MiscHelpers, Stats, PollService, UserParamsIni, (+ `config/storage.php` bridge) |
 
-### What's DONE
+Legacy reference (`legacy/`): Yii1 app remains for diff and copy; not required at runtime for Yii2.
 
-- Core CRUD controllers: Bug, CrashGroup, CrashReport, DebugInfo, Mail, User, UserGroup
-- All domain models ported (renamed to Yii2 conventions)
-- Authentication via `IdentityInterface` on `User` model
-- RBAC via `DbManager` with legacy table names
-- Daemon component for background processing
-- BatchImporter component
-- AdminLTE3 + Bootstrap 5 layout system
-- Web installer (Yii2-only, new feature)
-- Upload endpoints (external + authenticated)
+### What's DONE (high level)
+
+- **Core CRUD:** Bug, CrashGroup, CrashReport, DebugInfo, Mail, User, UserGroup, Project.
+- **Additional areas:** Extra Files (collections ZIP), Serials Info (admin grid + view), full **web installer** with **new DB** vs **existing Yii1 DB** path, **legacy file storage** via `user_params.ini` + `LegacyStorage`, **Poll / daemon tick** (`PollService` + traits for XML import).
+- **Auth:** `IdentityInterface` on `User`, RBAC `DbManager` with legacy table names.
+- **Password flows:** Login, reset password, **recover password** (`RecoverPasswordForm` + `views/site/recoverPassword.php`).
+- **Site:** Failed items + bulk retry/delete, daemon admin + runtime stats, **static pages** `site/page` → `views/site/pages/*.php`.
+- **Crash reports:** Tabbed view with `_viewSummary`, `_viewFiles`, `_viewCustomProps`, `_viewVideos`, `_viewScreenshots`, `_viewThreads`, `_viewModules`, `_upload`, `_reportList`, **`_search`** (index filters).
+- **Bugs:** `view.php` + history via **`views/site/_bugChange.php`**; index uses `BugSearch` + inline filter form (no separate `_search` partial).
+- **Debug info:** `uploadFile.php`, **`views/debug-info/_upload.php`**, format/DWARF columns where migrated.
+- **Projects:** **`actionAdmin`** + `views/project/admin.php` + `ProjectSearch`.
+- **Layouts:** AdminLTE3-based main layout; install layout.
+- **Deployment docs:** `docs/deployment/*` including Option C updated for installer storage.
 
 ### What's PARTIAL
 
-| Item | What's Missing |
-|------|---------------|
-| `SiteController` | `actionRecoverPassword` is a stub, no `RecoverPasswordForm` model, no view |
-| `ProjectController` | `actionAdmin` not ported, no admin/search views |
-| `BugController` | Missing `_view`, `_search`, `_bugChange` partials |
-| `CrashReportController` | Missing many view partials (`_viewCustomProps`, `_viewFiles`, `_viewVideos`, `_viewModules`, `_viewScreenshots`, `_viewThreads`, `_search`) |
-| `CrashGroupController` | Missing search/form partials |
-| `DebugInfoController` | Missing `_upload` partial |
-| `UserGroupController` | Missing `_view`, `_search` partials |
+| Item | Notes |
+|------|--------|
+| **`SiteController::actionContact`** | `views/site/contact.php` and `ContactForm` exist; **no `actionContact`** wired in `SiteController` (and no access rule). Wire or remove the orphan view. |
+| **`CrashReportForm` (dedicated model)** | Upload path uses **`Crashreport`** AR + `UploadedFile`; legacy had a separate form model — optional refactor for parity only. |
+| **Extracted `_search` partials** | Crash **report** has `_search.php`. **Bug** / **crash-group** use **inline** GET forms on `index.php` instead of a shared `_search` partial — behaviour OK, structure differs from Yii1. |
+| **Project `views/project/_view.php` / `_search.php`** | **Not present**; `view.php` / `index.php` are self-contained. Optional cleanup for consistency only. |
+| **User group `views/user-group/_view.php` / `_search.php`** | **Not present**; `view.php` / `index.php` hold the UI. |
+| **Automated tests / CI** | Codeception scaffolding exists; coverage and “every action” functional tests are **not** complete. |
+| **Cross-cutting widget audit (Phase 3.18–3.21)** | Most views use Yii2 widgets; no guarantee **every** legacy corner is converted — spot-check when touching a module. |
 
-### What's MISSING
+### What's MISSING (still worth tracking)
 
-1. **`RecoverPasswordForm`** model + full password recovery flow
-2. **`CrashReportForm`** model (legacy upload form model)
-3. **`ProjectController::actionAdmin`** + admin view
-4. **`site/page`** static page action (CViewAction equivalent)
-5. **`views/site/recoverPassword.php`**
-6. **`views/site/_bugChange.php`**
-7. Several view partials across crash-report, bug, crash-group, debug-info, user-group
+1. **`actionContact` + access rules** (or delete unused `contact.php`).
+2. **Optional:** dedicated **`CrashReportForm`** mirroring legacy naming.
+3. **Test suite completion** (model rules, uploads, RBAC, installer paths).
+4. **Production hardening** (Phase 7 items: strip debug tools, prod config checklist — see below).
 
 ---
 
@@ -62,222 +66,165 @@
 
 #### Tasks
 
-- [ ] **0.1** Set up Git repository with proper `.gitignore` (exclude `vendor/`, `runtime/`, `web/assets/`, `config/user_params.ini`, `config/installed.txt`)
-- [ ] **0.2** Verify `composer install` works cleanly
-- [ ] **0.3** Run the installer flow end-to-end, confirm DB schema creates correctly
-- [ ] **0.4** Test all existing Yii2 controllers — document which pages render vs error
-- [ ] **0.5** Set up proper Yii2 migrations (move schema from `InstallController::actionRunMigrations` to `migrations/` directory)
-- [ ] **0.6** Create a test database and seed data script
-- [ ] **0.7** Configure Codeception test suites
+- [x] **0.1** Git `.gitignore` excludes `vendor/`, `runtime/`, `web/assets/`, `config/user_params.ini`, `config/installed.txt` (verify locally if you add paths).
+- [ ] **0.2** Verify `composer install` works cleanly on a fresh clone.
+- [ ] **0.3** Run installer **fresh** and **existing Yii1** paths on a throwaway DB; confirm migrations + `LegacyStorage` when applicable.
+- [ ] **0.4** Smoke-test main controllers (logged-in and guest where relevant); log gaps in issues, not only here.
+- [x] **0.5** Yii2 migrations live under `migrations/`; installer runs the same set via `InstallController::runPendingMigrations`.
+- [ ] **0.6** Optional seed / fixture DB for demos.
+- [ ] **0.7** Codeception: expand beyond minimal coverage.
 
-**Deliverable:** Working dev environment, CI-ready test harness
+**Deliverable:** Working dev environment; repeatable install.
 
 ---
 
 ### Phase 1: Model Layer Completion (Week 2)
 
-> **Goal:** Ensure all ActiveRecord models are fully ported with proper Yii2 patterns
+> **Goal:** ActiveRecord + forms + search aligned with legacy behaviour
 
 #### Tasks
 
-- [ ] **1.1** Port `RecoverPasswordForm` from legacy `models/RecoverPasswordForm.php`
-- [ ] **1.2** Port `CrashReportForm` from legacy `models/CrashReportForm.php` (or integrate into existing upload flow)
-- [ ] **1.3** Audit all 31 Yii2 models against legacy counterparts:
-  - Verify `rules()` validation matches legacy
-  - Verify `relations()` → Yii2 `hasOne()`/`hasMany()` are complete
-  - Verify `search()` → Yii2 `SearchModel` pattern is implemented
-  - Verify `attributeLabels()` match
-  - Verify `beforeSave()`/`afterSave()` logic is ported
-- [ ] **1.4** Create Search models where missing (used by GridView/ListView in views):
-  - `CrashReportSearch`
-  - `CrashGroupSearch`
-  - `BugSearch`
-  - `DebugInfoSearch`
-  - `ProjectSearch`
-  - `UserGroupSearch`
-- [ ] **1.5** Verify RBAC permission names match between legacy `WebUser` checks and Yii2 `authManager`
+- [x] **1.1** `RecoverPasswordForm` present and used from `SiteController`.
+- [ ] **1.2** Optional: port **`CrashReportForm`** or document that **`Crashreport`** upload is the supported path.
+- [ ] **1.3** Ongoing: diff each model vs `legacy/protected/models/` when fixing bugs (rules, relations, labels, save hooks).
+- [x] **1.4** Search models: `CrashreportSearch`, `CrashgroupSearch`, `BugSearch`, `DebuginfoSearch`, `ProjectSearch`, `UsergroupSearch`, `UserSearch`, `ExtrafilesSearch`, `SerialsinfoSearch`, …
+- [ ] **1.5** RBAC name parity: re-verify `gperm_*` / `pperm_*` when adding actions.
 
-**Deliverable:** Complete model layer with all Search models
+**Deliverable:** Models trustworthy for production data.
 
 ---
 
 ### Phase 2: Controller Actions (Week 3)
 
-> **Goal:** Port all missing controller actions
+> **Goal:** Behaviour parity with legacy where it matters
 
 #### Tasks
 
-- [ ] **2.1** `SiteController::actionRecoverPassword` — full implementation with email sending
-- [ ] **2.2** `ProjectController::actionAdmin` — admin grid with search/filter
-- [ ] **2.3** Verify all controller `access` rules match legacy permission checks
-- [ ] **2.4** Audit each controller action parameter handling (Yii1 `$_GET`/`$_POST` → Yii2 `Yii::$app->request`)
-- [ ] **2.5** Port any missing filter/behavior logic from legacy `Controller.php` base class
-- [ ] **2.6** Verify file upload handling in `CrashReportController` and `DebugInfoController`
-- [ ] **2.7** Verify daemon communication in all actions that call the Daemon component
+- [x] **2.1** `SiteController::actionRecoverPassword` — implemented (email via mailer).
+- [x] **2.2** `ProjectController::actionAdmin` — grid + `ProjectSearch`.
+- [ ] **2.3** Access rules: audit when adding endpoints (Extra Files, Serials Info, Failed, etc.).
+- [ ] **2.4** Request handling audit (GET/POST) — ongoing.
+- [ ] **2.5** Legacy base `Controller` filters — port any missing cross-cutting behaviour if found.
+- [x] **2.6** Crash report + debug info uploads present; storage abstraction used.
+- [x] **2.7** Daemon used from Site admin + Poll tick + controllers that dispatch work.
 
-**Deliverable:** All controller actions functional
+**Deliverable:** No known stub for critical user journeys except contact (see PARTIAL).
 
 ---
 
-### Phase 3: View Layer (Weeks 4-5)
+### Phase 3: View Layer (Weeks 4–5)
 
-> **Goal:** Port all missing views and partials, modernize with AdminLTE3
+> **Goal:** UI complete and AdminLTE-consistent
 
-#### Tasks
+#### Tasks — Crash report (HIGH)
 
-##### Crash Report Views (Priority: HIGH)
-- [ ] **3.1** Port `_viewCustomProps.php` — custom properties tab/section
-- [ ] **3.2** Port `_viewFiles.php` — attached files list
-- [ ] **3.3** Port `_viewVideos.php` — video attachments
-- [ ] **3.4** Port `_viewModules.php` — loaded modules list
-- [ ] **3.5** Port `_viewScreenshots.php` — screenshot gallery
-- [ ] **3.6** Port `_viewThreads.php` — thread/stack trace display
-- [ ] **3.7** Port `_search.php` — crash report search form
+- [x] **3.1** `_viewCustomProps.php`
+- [x] **3.2** `_viewFiles.php`
+- [x] **3.3** `_viewVideos.php`
+- [x] **3.4** `_viewModules.php`
+- [x] **3.5** `_viewScreenshots.php`
+- [x] **3.6** `_viewThreads.php`
+- [x] **3.7** `_search.php` (index filter card)
 
-##### Bug Views (Priority: HIGH)
-- [ ] **3.8** Port `_view.php` — bug detail partial
-- [ ] **3.9** Port `_search.php` — bug search form
-- [ ] **3.10** Port `_bugChange.php` — bug change history display
+#### Bug (HIGH)
 
-##### Project Views (Priority: MEDIUM)
-- [ ] **3.11** Create `admin.php` — project admin grid
-- [ ] **3.12** Port `_view.php` and `_search.php` partials
+- [x] **3.8** Bug detail in `bug/view.php` (no separate `_view` partial — acceptable).
+- [~] **3.9** Search/filter **inline** on `bug/index.php` (not a `_search` partial).
+- [x] **3.10** `views/site/_bugChange.php`
 
-##### Crash Group Views (Priority: MEDIUM)
-- [ ] **3.13** Port search/filter partials
+#### Project (MEDIUM)
 
-##### Debug Info Views (Priority: MEDIUM)
-- [ ] **3.14** Port `_upload.php` partial
+- [x] **3.11** `project/admin.php`
+- [~] **3.12** `_view` / `_search` partials — **not used**; main views suffice.
 
-##### User Group Views (Priority: LOW)
-- [ ] **3.15** Port `_view.php` and `_search.php` partials
+#### Crash group (MEDIUM)
 
-##### Site Views (Priority: HIGH)
-- [ ] **3.16** Create `recoverPassword.php` view
-- [ ] **3.17** Port `_bugChange.php` partial
+- [~] **3.13** Filters **inline** on `crash-group/index.php` / `view.php`.
 
-##### Cross-cutting
-- [ ] **3.18** Convert all Yii1 widget calls (`CGridView`, `CListView`, `CDetailView`, `CActiveForm`) to Yii2 equivalents (`GridView`, `ListView`, `DetailView`, `ActiveForm`)
-- [ ] **3.19** Replace `CHtml::` helpers with `Html::` equivalents
-- [ ] **3.20** Update all `Yii::app()` references to `Yii::$app`
-- [ ] **3.21** Verify AdminLTE3 card/box layout consistency across all views
+#### Debug info (MEDIUM)
 
-**Deliverable:** All views render correctly with AdminLTE3 styling
+- [x] **3.14** `debug-info/_upload.php` (+ `uploadFile.php` flow)
+
+#### User group (LOW)
+
+- [~] **3.15** No `_view` / `_search` partials; `view.php` / `index.php` complete.
+
+#### Site (HIGH)
+
+- [x] **3.16** `recoverPassword.php`
+- [x] **3.17** `_bugChange.php`
+- [x] **3.18a** Static pages: `site/page`, `views/site/pages/*`
+
+#### Cross-cutting
+
+- [~] **3.18–3.21** Ongoing when editing views; no open “all files must be rewritten” task.
+
+**Deliverable:** Primary user flows render; see PARTIAL for contact page wiring.
 
 ---
 
 ### Phase 4: Components & Infrastructure (Week 5)
 
-> **Goal:** Ensure all supporting components work correctly
-
 #### Tasks
 
-- [ ] **4.1** Audit `Daemon.php` — verify socket communication, error handling, timeouts
-- [ ] **4.2** Audit `BatchImporter.php` — verify import logic works with Yii2 models
-- [ ] **4.3** Audit `MiscHelpers.php` — verify all helper methods are ported and used
-- [ ] **4.4** Audit `WebUser.php` — verify `gperm_*`/`pperm_*` permission mapping completeness
-- [ ] **4.5** Port mail functionality — verify Symfony Mailer config replaces legacy mailer
-- [ ] **4.6** Verify file upload/download paths and storage logic
-- [ ] **4.7** Verify session handling (Yii2 `DbSession` if legacy used `YiiSession` table)
-- [ ] **4.8** Verify caching setup (legacy `cache` table → Yii2 `DbCache` or alternative)
+- [ ] **4.1–4.8** Periodic audit: Daemon, BatchImporter, Mailer, Storage/LegacyStorage, DbSession/DbCache, WebUser.
 
-**Deliverable:** All infrastructure components verified and working
+**Deliverable:** Ops confidence on each integration.
 
 ---
 
 ### Phase 5: Database & Migrations (Week 6)
 
-> **Goal:** Proper Yii2 migration system, data migration from legacy
-
 #### Tasks
 
-- [ ] **5.1** Create Yii2 migrations for all tables (extract from `InstallController`)
-- [ ] **5.2** Create RBAC migration (`rbac/init` or manual migration)
-- [ ] **5.3** Create seed data migration for `lookup` table
-- [ ] **5.4** Write data migration scripts for any existing production data
-- [ ] **5.5** Verify table prefix handling (`tbl_`) works consistently
-- [ ] **5.6** Add proper foreign key constraints where legacy had none
-- [ ] **5.7** Add database indexes for common query patterns
+- [x] **5.1** Table creation / evolution in `migrations/`.
+- [x] **5.2–5.3** RBAC + lookup seeds in migration set (as per repo).
+- [ ] **5.4** Optional dedicated **data** migration scripts for unusual prod dumps.
+- [x] **5.5** `tbl_` prefix via `user_params.ini` / `db.php`.
+- [ ] **5.6–5.7** Extra FKs/indexes only if profiling shows need.
 
-**Deliverable:** Complete migration system, data migration tested
+**Deliverable:** `php yii migrate` + installer adopt-mode for Yii1 DBs.
 
 ---
 
-### Phase 6: Testing & QA (Weeks 7-8)
-
-> **Goal:** Full test coverage and regression testing
+### Phase 6: Testing & QA (Weeks 7–8)
 
 #### Tasks
 
-- [ ] **6.1** Write unit tests for all model validation rules
-- [ ] **6.2** Write unit tests for Search models
-- [ ] **6.3** Write functional tests for each controller action
-- [ ] **6.4** Write functional tests for file upload flows
-- [ ] **6.5** Write functional tests for authentication/authorization
-- [ ] **6.6** Write functional tests for daemon communication
-- [ ] **6.7** Cross-browser testing of all views
-- [ ] **6.8** Performance testing — compare with legacy app response times
-- [ ] **6.9** Security audit — CSRF, XSS, SQL injection, file upload validation
-
-**Deliverable:** Test suite with >80% coverage, all tests passing
+- [ ] **6.1–6.9** As needed before production cutover.
 
 ---
 
 ### Phase 7: Cleanup & Launch (Week 8)
 
-> **Goal:** Production-ready application
-
 #### Tasks
 
-- [ ] **7.1** Remove all debug/test scripts from root (`debug_save.php`, `get_project.php`, `test_upload.php`, `test_db.php`)
-- [ ] **7.2** Update `README.md` with CrashFix-specific documentation
-- [ ] **7.3** Remove or archive `legacy/` directory
-- [ ] **7.4** Configure production `web.php` (disable debug, gii; set proper cookie key)
-- [ ] **7.5** Set up error logging and monitoring
-- [ ] **7.6** Create deployment documentation
-- [ ] **7.7** Final side-by-side comparison with legacy app
-
-**Deliverable:** Production deployment
+- [ ] **7.1** Remove stray debug scripts from repo root if any appear.
+- [ ] **7.2** README / deployment kept in sync with installer + storage options.
+- [ ] **7.3** Keep or archive `legacy/` per team policy (reference is still useful).
+- [ ] **7.4** Production `web.php`: `YII_DEBUG` off, secure cookie key, no Gii.
+- [ ] **7.5–7.7** Logging, monitoring, final side-by-side checklist.
 
 ---
 
 ## Team Role Assignments
 
+(Unchanged — still a reasonable split.)
+
 ### Role 1: Backend Lead (Models & Controllers)
 **Owns:** Phases 1, 2, 5  
-**Focus areas:**
-- ActiveRecord model completion and validation
-- Search model creation
-- Controller action porting
-- Database migration system
-- RBAC and permission system
+**Focus:** AR, Search models, permissions, migrations, Poll/daemon behaviour.
 
 ### Role 2: Frontend Lead (Views & UI)
 **Owns:** Phase 3  
-**Focus areas:**
-- View template porting (Yii1 widgets → Yii2 widgets)
-- AdminLTE3 integration and styling
-- GridView/ListView/DetailView configuration
-- JavaScript/jQuery interactions
-- Responsive design
+**Focus:** AdminLTE consistency, accessibility, remaining contact page wiring.
 
 ### Role 3: Infrastructure & DevOps
 **Owns:** Phases 0, 4, 7  
-**Focus areas:**
-- Dev environment setup
-- Daemon component
-- File storage and upload handling
-- Mail system
-- Deployment pipeline
-- Security hardening
+**Focus:** Installer, `LegacyStorage`, deployment docs, production config.
 
 ### Role 4: QA & Testing
 **Owns:** Phase 6  
-**Focus areas:**
-- Test suite development
-- Regression testing against legacy
-- Performance benchmarks
-- Security audit
 
 ---
 
@@ -298,11 +245,9 @@
 | `CDbCriteria` | `yii\db\Query` / `ActiveQuery` |
 | `CDbAuthManager` | `yii\rbac\DbManager` |
 | `Yii::app()->user->setFlash()` | `Yii::$app->session->setFlash()` |
-| `$this->renderPartial()` | `$this->renderPartial()` (same) |
 | `CUploadedFile::getInstance()` | `UploadedFile::getInstance()` |
-| `CHttpException` | `yii\web\HttpException` (or `NotFoundHttpException`, etc.) |
-| `accessRules()` | `behaviors()` with `AccessControl` filter |
-| `CUrlManager` rules | `urlManager` rules in config (similar syntax) |
+| `accessRules()` | `behaviors()` + `AccessControl` |
+| `CViewAction` static pages | `SiteController::actionPage` + `views/site/pages/` |
 
 ---
 
@@ -310,11 +255,10 @@
 
 | Yii1 (legacy) | Yii2 (modern) |
 |---------------|---------------|
-| `controllers/CrashReportController.php` | `controllers/CrashReportController.php` (same) |
-| `views/crashReport/` | `views/crash-report/` (kebab-case) |
-| `views/debugInfo/` | `views/debug-info/` (kebab-case) |
-| `views/userGroup/` | `views/user-group/` (kebab-case) |
-| `views/crashGroup/` | `views/crash-group/` (kebab-case) |
+| `views/crashReport/` | `views/crash-report/` |
+| `views/debugInfo/` | `views/debug-info/` |
+| `views/userGroup/` | `views/user-group/` |
+| `views/crashGroup/` | `views/crash-group/` |
 
 ---
 
@@ -322,23 +266,17 @@
 
 | Risk | Impact | Mitigation |
 |------|--------|------------|
-| Daemon protocol incompatibility | HIGH | Test daemon communication early (Phase 0) |
-| Legacy password hash incompatibility | HIGH | Already handled — Yii2 `User` model uses legacy salt+hash |
-| Missing view partials cause 500 errors | MEDIUM | Audit all `render()`/`renderPartial()` calls vs existing view files |
-| RBAC permission name mismatches | MEDIUM | Map all `gperm_*`/`pperm_*` checks systematically |
-| File upload path differences | MEDIUM | Verify storage paths match between legacy and modern |
-| jQuery/JS dependency conflicts | LOW | AdminLTE3 bundles its own jQuery; verify no conflicts |
-| Data migration for production DB | HIGH | Write and test migration scripts against a copy of prod data |
+| Daemon protocol / poll tick | HIGH | Exercise `php yii poll/run` with live `crashfixd`; watch `tbl_operation`. |
+| Legacy password hashes | HIGH | `User` model keeps legacy salt + hash behaviour. |
+| Installer adopt-mode marks migration applied | MEDIUM | Backup DB first; review logs for “adopted” steps; fix drift manually if needed. |
+| `LegacyStorage` path wrong | MEDIUM | Installer validates `crashReports` / `debugInfo`; double-check `storage_base_path`. |
+| RBAC mismatch on new action | MEDIUM | Add explicit `AccessControl` rules per action. |
 
 ---
 
-## Priority Order (if resources are limited)
+## Priority Order (updated)
 
-1. **Phase 1** — Model completion (blocks everything else)
-2. **Phase 3 (HIGH items)** — Crash report and bug views (core functionality)
-3. **Phase 2** — Controller actions (recover password, project admin)
-4. **Phase 5** — Database migrations (needed for deployment)
-5. **Phase 4** — Component audit (daemon, mail)
-6. **Phase 3 (MEDIUM/LOW)** — Remaining view partials
-7. **Phase 6** — Testing
-8. **Phase 7** — Cleanup and launch
+1. **Close real gaps:** wire **`actionContact`** or remove orphan view; any security/access review for new modules.
+2. **Phase 6** — tests for installer, upload, Poll, RBAC before prod.
+3. **Phase 4 / 7** — production config, logging, daemon connectivity monitoring.
+4. **Cosmetic** — extract `_search` partials for bug/crash-group if the team wants file symmetry with Yii1.
