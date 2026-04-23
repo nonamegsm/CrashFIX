@@ -13,8 +13,6 @@
 $this->pageTitle = Yii::app()->name . ' - Failed Reports';
 $this->breadcrumbs = array('Failed Reports');
 
-// Preserve cross-section query params on submit so searching one
-// grid does not clobber pagination/sort on the other.
 $req = Yii::app()->request;
 $preserve = function(array $exclude) use ($req) {
     $out = '';
@@ -26,6 +24,10 @@ $preserve = function(array $exclude) use ($req) {
     }
     return $out;
 };
+
+$retryUrl  = $this->createUrl('site/failedRetry');
+$deleteUrl = $this->createUrl('site/failedDelete');
+$returnTo  = $req->requestUri;
 ?>
 
 <style>
@@ -44,6 +46,12 @@ $preserve = function(array $exclude) use ($req) {
 .cf-active-filter  { display: inline-block; margin-left: 8px; padding: 2px 8px;
                      background: #fff3cd; color: #856404; border-radius: 4px;
                      font-size: 11px; }
+.cf-bulk-bar       { padding: 6px 8px; margin: 4px 0 8px 0; background: #f8f9fa;
+                     border: 1px solid #e1e1e1; border-radius: 4px; font-size: 12px; }
+.cf-bulk-bar .cf-bulk-count { color: #666; min-width: 110px; display: inline-block; }
+.cf-bulk-bar button { padding: 3px 10px; font-size: 12px; margin-right: 4px; }
+.cf-bulk-bar button[disabled] { opacity: 0.5; cursor: not-allowed; }
+.cf-bulk-bar .cf-bulk-spacer { display: inline-block; width: 24px; }
 .flash-success     { padding: 8px 12px; background: #dff0d8; color: #2c662d;
                      border: 1px solid #b6dfb1; border-radius: 4px; margin-bottom: 10px; }
 .flash-error       { padding: 8px 12px; background: #f2dede; color: #952422;
@@ -54,12 +62,11 @@ $preserve = function(array $exclude) use ($req) {
 
 <p class="cf-failed-meta">
     Crash reports and debug-info files in the current project that the daemon
-    could not process. Each row shows the most recent error message captured by
-    <code>tbl_processingerror</code>. Use <strong>Retry</strong> to re-queue an
-    item for the next daemon poll cycle (status flips back to Pending; the
-    existing error history is preserved so you can still see what went wrong).
-    Click any column header to sort. The search box matches filename, GUID,
-    and any historical error-message text.
+    could not process. Click any column header to sort. The search box matches
+    filename, GUID, and any historical error-message text. Use the checkboxes
+    plus the bulk action bar to retry or delete in batches; the
+    <strong>Retry/Delete ALL matching</strong> buttons operate on every row
+    matching the current filter, capped at 500 deletions per click.
 </p>
 
 <?php if(Yii::app()->user->hasFlash('failed-retry-success')): ?>
@@ -79,9 +86,7 @@ $preserve = function(array $exclude) use ($req) {
         <h3>Failed crash reports
             <span style="color:#a00;">(<?php echo (int)$crashTotal; ?>)</span>
             <?php if($crashQ !== ''): ?>
-                <span class="cf-active-filter">
-                    filter: <strong><?php echo CHtml::encode($crashQ); ?></strong>
-                </span>
+                <span class="cf-active-filter">filter: <strong><?php echo CHtml::encode($crashQ); ?></strong></span>
             <?php endif; ?>
         </h3>
 
@@ -111,68 +116,117 @@ $preserve = function(array $exclude) use ($req) {
                     : 'No failed crash reports match your search.'; ?>
             </div>
         <?php else: ?>
-            <?php $this->widget('zii.widgets.grid.CGridView', array(
-                'dataProvider' => $crashProvider,
-                'selectableRows' => null,
-                'template' => "{items}\n{pager}\n{summary}",
-                'columns' => array(
-                    array(
-                        'name'   => 'id',
-                        'header' => 'ID',
-                        'type'   => 'raw',
-                        'value'  => 'CHtml::link("#".(int)$data->id,
-                                        Yii::app()->createUrl("crashReport/view",
-                                            array("id"=>$data->id)))',
-                        'cssClassExpression' => '"column-right-align"',
-                    ),
-                    array(
-                        'name'   => 'srcfilename',
-                        'header' => 'File',
-                        'type'   => 'text',
-                        'value'  => '$data->srcfilename
-                                       ? $data->srcfilename
-                                       : ("crashguid ".substr((string)$data->crashguid, 0, 8))',
-                    ),
-                    array(
-                        'name'   => 'received',
-                        'header' => 'Received',
-                        'type'   => 'text',
-                        'value'  => '(int)$data->received > 0
-                                       ? date("Y-m-d H:i", (int)$data->received)
-                                       : "-"',
-                    ),
-                    array(
-                        'name'   => 'filesize',
-                        'header' => 'Size',
-                        'type'   => 'text',
-                        'value'  => 'MiscHelpers::fileSizeToStr((int)$data->filesize)',
-                        'cssClassExpression' => '"column-right-align"',
-                    ),
-                    array(
-                        'header' => 'Reason',
-                        'type'   => 'raw',
-                        'value'  => 'isset($data->last_error) && (string)$data->last_error !== ""
-                                       ? \'<span class="cf-failed-error">\'
-                                            . CHtml::encode((string)$data->last_error)
-                                            . \'</span>\'
-                                       : \'<span style="color:#999;">(no error message recorded)</span>\'',
-                    ),
-                    array(
-                        'header' => 'Action',
-                        'type'   => 'raw',
-                        'value'  => '
-                            CHtml::form(Yii::app()->createUrl("site/failedRetry"), "post",
-                                array("style"=>"display:inline; margin:0;"))
-                            . CHtml::hiddenField("kind", "crash")
-                            . CHtml::hiddenField("id", (int)$data->id)
-                            . CHtml::submitButton("Retry",
-                                array("class"=>"cf-retry-btn",
-                                      "confirm"=>"Re-queue crash report #".(int)$data->id."?"))
-                            . CHtml::endForm()
-                        ',
-                    ),
-                ),
+            <?php echo CHtml::beginForm($retryUrl, 'post', array(
+                'id' => 'cf-bulk-form-crash',
+                'data-grid-id' => 'cf-grid-crash',
             )); ?>
+                <?php echo CHtml::hiddenField('kind',   'crash'); ?>
+                <?php echo CHtml::hiddenField('q',      $crashQ); ?>
+                <?php echo CHtml::hiddenField('return', $returnTo); ?>
+                <?php echo CHtml::hiddenField('all',    '0', array('data-bulk-all'=>'1')); ?>
+
+                <div class="cf-bulk-bar">
+                    <span class="cf-bulk-count" data-counter="cf-grid-crash">0 selected</span>
+                    <button type="submit"
+                            class="cf-bulk-btn-selected"
+                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                            data-confirm-prefix="Re-queue"
+                            data-kind-label="crash report" disabled>Retry selected</button>
+                    <button type="submit"
+                            class="cf-bulk-btn-selected"
+                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                            data-confirm-prefix="PERMANENTLY DELETE"
+                            data-kind-label="crash report" disabled>Delete selected</button>
+                    <span class="cf-bulk-spacer"></span>
+                    <button type="submit"
+                            class="cf-bulk-btn-all"
+                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                            data-confirm-msg="Re-queue ALL <?php echo (int)$crashTotal; ?> matching crash reports?
+They'll be picked up by the daemon on the next poll cycle.">
+                        Retry ALL <?php echo (int)$crashTotal; ?> matching
+                    </button>
+                    <button type="submit"
+                            class="cf-bulk-btn-all"
+                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                            data-confirm-msg="PERMANENTLY DELETE all <?php echo (int)$crashTotal; ?> matching crash reports?
+This cannot be undone. The on-disk .zip files will also be removed.
+(Capped at 500 per click; click again if more remain.)">
+                        Delete ALL <?php echo (int)$crashTotal; ?> matching
+                    </button>
+                </div>
+
+                <?php $this->widget('zii.widgets.grid.CGridView', array(
+                    'id'             => 'cf-grid-crash',
+                    'dataProvider'   => $crashProvider,
+                    'selectableRows' => null,
+                    'template'       => "{items}\n{pager}\n{summary}",
+                    'columns' => array(
+                        array(
+                            'class'           => 'CCheckBoxColumn',
+                            'id'              => 'ids',
+                            'value'           => '$data->id',
+                            'selectableRows'  => 2,
+                            'checkBoxHtmlOptions' => array('class' => 'cf-row-checkbox'),
+                        ),
+                        array(
+                            'name'   => 'id',
+                            'header' => 'ID',
+                            'type'   => 'raw',
+                            'value'  => 'CHtml::link("#".(int)$data->id,
+                                            Yii::app()->createUrl("crashReport/view",
+                                                array("id"=>$data->id)))',
+                            'cssClassExpression' => '"column-right-align"',
+                        ),
+                        array(
+                            'name'   => 'srcfilename',
+                            'header' => 'File',
+                            'type'   => 'text',
+                            'value'  => '$data->srcfilename
+                                           ? $data->srcfilename
+                                           : ("crashguid ".substr((string)$data->crashguid, 0, 8))',
+                        ),
+                        array(
+                            'name'   => 'received',
+                            'header' => 'Received',
+                            'type'   => 'text',
+                            'value'  => '(int)$data->received > 0
+                                           ? date("Y-m-d H:i", (int)$data->received)
+                                           : "-"',
+                        ),
+                        array(
+                            'name'   => 'filesize',
+                            'header' => 'Size',
+                            'type'   => 'text',
+                            'value'  => 'MiscHelpers::fileSizeToStr((int)$data->filesize)',
+                            'cssClassExpression' => '"column-right-align"',
+                        ),
+                        array(
+                            'header' => 'Reason',
+                            'type'   => 'raw',
+                            'value'  => 'isset($data->last_error) && (string)$data->last_error !== ""
+                                           ? \'<span class="cf-failed-error">\'
+                                                . CHtml::encode((string)$data->last_error)
+                                                . \'</span>\'
+                                           : \'<span style="color:#999;">(no error message recorded)</span>\'',
+                        ),
+                        array(
+                            'header' => 'Action',
+                            'type'   => 'raw',
+                            // Per-row Retry: a plain (non-submit) button
+                            // carrying data-attrs. JS at the bottom of
+                            // the page turns the click into a single-row
+                            // POST. Avoids nesting a <form> inside this
+                            // bulk form (invalid HTML).
+                            'value'  => 'CHtml::htmlButton("Retry", array(
+                                "type"        => "button",
+                                "class"       => "cf-retry-btn cf-row-retry",
+                                "data-row-id" => (int)$data->id,
+                                "data-confirm"=> "Re-queue crash report #".(int)$data->id."?",
+                            ))',
+                        ),
+                    ),
+                )); ?>
+            <?php echo CHtml::endForm(); ?>
         <?php endif; ?>
     </div>
 <?php elseif(!$canCrash): ?>
@@ -190,9 +244,7 @@ $preserve = function(array $exclude) use ($req) {
         <h3>Failed debug-info files
             <span style="color:#a00;">(<?php echo (int)$debugTotal; ?>)</span>
             <?php if($debugQ !== ''): ?>
-                <span class="cf-active-filter">
-                    filter: <strong><?php echo CHtml::encode($debugQ); ?></strong>
-                </span>
+                <span class="cf-active-filter">filter: <strong><?php echo CHtml::encode($debugQ); ?></strong></span>
             <?php endif; ?>
         </h3>
 
@@ -222,72 +274,116 @@ $preserve = function(array $exclude) use ($req) {
                     : 'No failed debug-info files match your search.'; ?>
             </div>
         <?php else: ?>
-            <?php $this->widget('zii.widgets.grid.CGridView', array(
-                'dataProvider' => $debugProvider,
-                'selectableRows' => null,
-                'template' => "{items}\n{pager}\n{summary}",
-                'columns' => array(
-                    array(
-                        'name'   => 'id',
-                        'header' => 'ID',
-                        'type'   => 'raw',
-                        'value'  => 'CHtml::link("#".(int)$data->id,
-                                        Yii::app()->createUrl("debugInfo/view",
-                                            array("id"=>$data->id)))',
-                        'cssClassExpression' => '"column-right-align"',
-                    ),
-                    array(
-                        'name'   => 'filename',
-                        'header' => 'File',
-                        'type'   => 'text',
-                        'value'  => '(string)$data->filename',
-                    ),
-                    array(
-                        'header' => 'Format',
-                        'type'   => 'text',
-                        'value'  => 'method_exists($data, "getFormatStr")
-                                       ? $data->getFormatStr()
-                                       : ((string)$data->format !== "" ? $data->format : "detecting...")',
-                    ),
-                    array(
-                        'name'   => 'status',
-                        'header' => 'Status',
-                        'type'   => 'text',
-                        'value'  => '$data->getStatusStr()',
-                    ),
-                    array(
-                        'name'   => 'dateuploaded',
-                        'header' => 'Uploaded',
-                        'type'   => 'text',
-                        'value'  => '(int)$data->dateuploaded > 0
-                                       ? date("Y-m-d H:i", (int)$data->dateuploaded)
-                                       : "-"',
-                    ),
-                    array(
-                        'header' => 'Reason',
-                        'type'   => 'raw',
-                        'value'  => 'isset($data->last_error) && (string)$data->last_error !== ""
-                                       ? \'<span class="cf-failed-error">\'
-                                            . CHtml::encode((string)$data->last_error)
-                                            . \'</span>\'
-                                       : \'<span style="color:#999;">(no error message recorded)</span>\'',
-                    ),
-                    array(
-                        'header' => 'Action',
-                        'type'   => 'raw',
-                        'value'  => '
-                            CHtml::form(Yii::app()->createUrl("site/failedRetry"), "post",
-                                array("style"=>"display:inline; margin:0;"))
-                            . CHtml::hiddenField("kind", "debug")
-                            . CHtml::hiddenField("id", (int)$data->id)
-                            . CHtml::submitButton("Retry",
-                                array("class"=>"cf-retry-btn",
-                                      "confirm"=>"Re-queue debug info file #".(int)$data->id."?"))
-                            . CHtml::endForm()
-                        ',
-                    ),
-                ),
+            <?php echo CHtml::beginForm($retryUrl, 'post', array(
+                'id' => 'cf-bulk-form-debug',
+                'data-grid-id' => 'cf-grid-debug',
             )); ?>
+                <?php echo CHtml::hiddenField('kind',   'debug'); ?>
+                <?php echo CHtml::hiddenField('q',      $debugQ); ?>
+                <?php echo CHtml::hiddenField('return', $returnTo); ?>
+                <?php echo CHtml::hiddenField('all',    '0', array('data-bulk-all'=>'1')); ?>
+
+                <div class="cf-bulk-bar">
+                    <span class="cf-bulk-count" data-counter="cf-grid-debug">0 selected</span>
+                    <button type="submit"
+                            class="cf-bulk-btn-selected"
+                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                            data-confirm-prefix="Re-queue"
+                            data-kind-label="debug-info file" disabled>Retry selected</button>
+                    <button type="submit"
+                            class="cf-bulk-btn-selected"
+                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                            data-confirm-prefix="PERMANENTLY DELETE"
+                            data-kind-label="debug-info file" disabled>Delete selected</button>
+                    <span class="cf-bulk-spacer"></span>
+                    <button type="submit"
+                            class="cf-bulk-btn-all"
+                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                            data-confirm-msg="Re-queue ALL <?php echo (int)$debugTotal; ?> matching debug-info files?
+They'll be picked up by the daemon on the next poll cycle.">
+                        Retry ALL <?php echo (int)$debugTotal; ?> matching
+                    </button>
+                    <button type="submit"
+                            class="cf-bulk-btn-all"
+                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                            data-confirm-msg="PERMANENTLY DELETE all <?php echo (int)$debugTotal; ?> matching debug-info files?
+This cannot be undone. The on-disk symbol files will also be removed.
+(Capped at 500 per click; click again if more remain.)">
+                        Delete ALL <?php echo (int)$debugTotal; ?> matching
+                    </button>
+                </div>
+
+                <?php $this->widget('zii.widgets.grid.CGridView', array(
+                    'id'             => 'cf-grid-debug',
+                    'dataProvider'   => $debugProvider,
+                    'selectableRows' => null,
+                    'template'       => "{items}\n{pager}\n{summary}",
+                    'columns' => array(
+                        array(
+                            'class'           => 'CCheckBoxColumn',
+                            'id'              => 'ids',
+                            'value'           => '$data->id',
+                            'selectableRows'  => 2,
+                            'checkBoxHtmlOptions' => array('class' => 'cf-row-checkbox'),
+                        ),
+                        array(
+                            'name'   => 'id',
+                            'header' => 'ID',
+                            'type'   => 'raw',
+                            'value'  => 'CHtml::link("#".(int)$data->id,
+                                            Yii::app()->createUrl("debugInfo/view",
+                                                array("id"=>$data->id)))',
+                            'cssClassExpression' => '"column-right-align"',
+                        ),
+                        array(
+                            'name'   => 'filename',
+                            'header' => 'File',
+                            'type'   => 'text',
+                            'value'  => '(string)$data->filename',
+                        ),
+                        array(
+                            'header' => 'Format',
+                            'type'   => 'text',
+                            'value'  => 'method_exists($data, "getFormatStr")
+                                           ? $data->getFormatStr()
+                                           : ((string)$data->format !== "" ? $data->format : "detecting...")',
+                        ),
+                        array(
+                            'name'   => 'status',
+                            'header' => 'Status',
+                            'type'   => 'text',
+                            'value'  => '$data->getStatusStr()',
+                        ),
+                        array(
+                            'name'   => 'dateuploaded',
+                            'header' => 'Uploaded',
+                            'type'   => 'text',
+                            'value'  => '(int)$data->dateuploaded > 0
+                                           ? date("Y-m-d H:i", (int)$data->dateuploaded)
+                                           : "-"',
+                        ),
+                        array(
+                            'header' => 'Reason',
+                            'type'   => 'raw',
+                            'value'  => 'isset($data->last_error) && (string)$data->last_error !== ""
+                                           ? \'<span class="cf-failed-error">\'
+                                                . CHtml::encode((string)$data->last_error)
+                                                . \'</span>\'
+                                           : \'<span style="color:#999;">(no error message recorded)</span>\'',
+                        ),
+                        array(
+                            'header' => 'Action',
+                            'type'   => 'raw',
+                            'value'  => 'CHtml::htmlButton("Retry", array(
+                                "type"        => "button",
+                                "class"       => "cf-retry-btn cf-row-retry",
+                                "data-row-id" => (int)$data->id,
+                                "data-confirm"=> "Re-queue debug info file #".(int)$data->id."?",
+                            ))',
+                        ),
+                    ),
+                )); ?>
+            <?php echo CHtml::endForm(); ?>
         <?php endif; ?>
     </div>
 <?php elseif(!$canDebug): ?>
@@ -298,3 +394,116 @@ $preserve = function(array $exclude) use ($req) {
         </div>
     </div>
 <?php endif; ?>
+
+<?php
+// CSRF token isn't enforced by default in Yii1 unless CHttpRequest's
+// enableCsrfValidation is on; fall back to empty string when not set
+// so the JS-built single-row Retry form posts cleanly either way.
+$csrfParam = (Yii::app()->request->csrfTokenName ?? null) ?: 'YII_CSRF_TOKEN';
+$csrfToken = Yii::app()->request->enableCsrfValidation
+    ? Yii::app()->request->csrfToken : '';
+$csrfJsParam = json_encode($csrfParam, JSON_UNESCAPED_SLASHES);
+$csrfJsToken = json_encode($csrfToken, JSON_UNESCAPED_SLASHES);
+$retryUrlJs  = json_encode($retryUrl, JSON_UNESCAPED_SLASHES);
+
+$script = <<<JS
+(function () {
+    var CSRF_PARAM = $csrfJsParam;
+    var CSRF_TOKEN = $csrfJsToken;
+    var RETRY_URL  = $retryUrlJs;
+
+    function updateCounter(form) {
+        var gridId = form.getAttribute('data-grid-id');
+        var counter = document.querySelector('[data-counter="' + gridId + '"]');
+        var grid = document.getElementById(gridId);
+        if (!grid || !counter) return;
+        var n = grid.querySelectorAll('input.cf-row-checkbox:checked').length;
+        counter.textContent = n + ' selected';
+        var btns = form.querySelectorAll('.cf-bulk-btn-selected');
+        for (var i = 0; i < btns.length; i++) btns[i].disabled = (n === 0);
+    }
+
+    var bulkForms = document.querySelectorAll('form[data-grid-id]');
+    for (var i = 0; i < bulkForms.length; i++) {
+        var form = bulkForms[i];
+        var grid = document.getElementById(form.getAttribute('data-grid-id'));
+        if (grid) {
+            grid.addEventListener('change', (function (f) {
+                return function (e) {
+                    setTimeout(function () { updateCounter(f); }, 0);
+                };
+            })(form));
+        }
+        updateCounter(form);
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('.cf-bulk-btn-selected, .cf-bulk-btn-all');
+        if (!btn) return;
+        var form = btn.closest('form[data-grid-id]');
+        if (!form) return;
+
+        var action = btn.getAttribute('data-action');
+        if (action) form.setAttribute('action', action);
+
+        var msg;
+        var isAll = btn.classList.contains('cf-bulk-btn-all');
+        if (isAll) {
+            msg = btn.getAttribute('data-confirm-msg') || 'Are you sure?';
+            var hidAll = form.querySelector('[data-bulk-all]');
+            if (hidAll) hidAll.value = '1';
+            // Strip selected ids so controller takes the all=1 path.
+            var grid = document.getElementById(form.getAttribute('data-grid-id'));
+            if (grid) {
+                var cb = grid.querySelectorAll('input.cf-row-checkbox:checked');
+                for (var i = 0; i < cb.length; i++) cb[i].checked = false;
+            }
+        } else {
+            var grid = document.getElementById(form.getAttribute('data-grid-id'));
+            var n = grid ? grid.querySelectorAll('input.cf-row-checkbox:checked').length : 0;
+            if (n === 0) {
+                e.preventDefault();
+                alert('Select one or more rows first.');
+                return;
+            }
+            var prefix = btn.getAttribute('data-confirm-prefix') || 'Process';
+            var label  = btn.getAttribute('data-kind-label')     || 'item';
+            msg = prefix + ' ' + n + ' selected ' + label + (n === 1 ? '' : 's') + '?';
+            var hidAll = form.querySelector('[data-bulk-all]');
+            if (hidAll) hidAll.value = '0';
+        }
+        if (!confirm(msg)) {
+            e.preventDefault();
+            return;
+        }
+    });
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('.cf-row-retry');
+        if (!btn) return;
+        e.preventDefault();
+        var msg = btn.getAttribute('data-confirm') || 'Re-queue this item?';
+        if (!confirm(msg)) return;
+        var bulk = btn.closest('form[data-grid-id]');
+        var kind = bulk ? bulk.querySelector('input[name="kind"]').value : '';
+        var rowId = btn.getAttribute('data-row-id');
+
+        var f = document.createElement('form');
+        f.method = 'post';
+        f.action = RETRY_URL;
+        f.style.display = 'none';
+        function add(name, value) {
+            var i = document.createElement('input');
+            i.type = 'hidden'; i.name = name; i.value = value;
+            f.appendChild(i);
+        }
+        if (CSRF_TOKEN) add(CSRF_PARAM, CSRF_TOKEN);
+        add('kind', kind);
+        add('id',   rowId);
+        document.body.appendChild(f);
+        f.submit();
+    });
+})();
+JS;
+Yii::app()->getClientScript()->registerScript('cf-failed-bulk', $script, CClientScript::POS_READY);
+?>

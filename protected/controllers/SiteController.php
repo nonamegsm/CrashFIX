@@ -52,7 +52,7 @@ class SiteController extends Controller
 			),
 			array('allow', // Allow authenticated users to index, logout, reset password
 				'actions'=>array('index', 'logout', 'resetPassword', 'setCurProject', 'checkDaemon',
-				                 'failedReports', 'failedRetry'),
+				                 'failedReports', 'failedRetry', 'failedDelete'),
 				'users'=>array('@'),
 			),			
 			array('allow', // Allow admin to access admin panel
@@ -696,71 +696,255 @@ class SiteController extends Controller
 	/**
 	 * POST /site/failedRetry
 	 *
-	 * Re-queue a single failed item by flipping its status back to
-	 * Pending. The daemon picks it up on the next poll cycle.
-	 * Existing processingerror rows are NOT deleted - the user can
-	 * still see the old failure reason; on a successful retry the
-	 * status will move on to Processed and a fresh error appears
-	 * only if it fails again.
+	 * Re-queue failed items by flipping their status back to Pending.
+	 * Existing tbl_processingerror rows are kept so the user can still
+	 * see the previous failure reason.
 	 *
 	 * Inputs (POST):
 	 *   kind = "crash" | "debug"
-	 *   id   = integer primary key in the matching table
+	 *   ONE of:
+	 *     id    = integer  -- single row
+	 *     ids[] = int[]    -- bulk by selection
+	 *     all   = "1"      -- bulk all matching the current filter
+	 *   q     = string    -- only meaningful when all=1
 	 */
 	public function actionFailedRetry()
 	{
 		if(!Yii::app()->request->isPostRequest)
 			throw new CHttpException(405, 'POST required.');
 
-		$kind = (string)Yii::app()->request->getPost('kind', '');
-		$id   = (int)   Yii::app()->request->getPost('id',   0);
-		$projectId = (int)Yii::app()->user->getCurProjectId();
-		$user = Yii::app()->user;
+		$req = Yii::app()->request;
+		$kind = (string)$req->getPost('kind', '');
+		$id   = (int)   $req->getPost('id', 0);
+		$ids  = (array) $req->getPost('ids', array());
+		$all  = (string)$req->getPost('all', '') === '1';
+		$q    = trim((string)$req->getPost('q', ''));
 
-		if($id <= 0 || ($kind !== 'crash' && $kind !== 'debug'))
+		$projectId = (int)Yii::app()->user->getCurProjectId();
+		if($projectId <= 0 || ($kind !== 'crash' && $kind !== 'debug'))
 		{
 			Yii::app()->user->setFlash('failed-retry-error', 'Invalid retry request.');
 			$this->redirect(array('site/failedReports'));
 			return;
 		}
 
-		if($kind === 'crash')
+		$ctx = $this->buildFailedBulkContext($kind, $projectId, $id, $ids, $all, $q);
+		if($ctx['error'] !== null)
 		{
-			if(!$user->checkAccess('pperm_browse_some_crash_reports'))
-				throw new CHttpException(403);
-			$row = CrashReport::model()->findByAttributes(array(
-				'id'=>$id, 'project_id'=>$projectId));
-			if($row === null)
-			{
-				Yii::app()->user->setFlash('failed-retry-error',
-					"Crash report #{$id} not found in current project.");
-				$this->redirect(array('site/failedReports'));
-				return;
-			}
-			$row->status = CrashReport::STATUS_PENDING_PROCESSING;
-			$row->save(false, array('status'));
-			Yii::app()->user->setFlash('failed-retry-success',
-				"Crash report #{$id} re-queued. Daemon will retry on the next poll cycle.");
+			Yii::app()->user->setFlash('failed-retry-error', $ctx['error']);
 			$this->redirect(array('site/failedReports'));
 			return;
 		}
 
-		// kind === 'debug'
-		if(!$user->checkAccess('pperm_browse_some_debug_info'))
-			throw new CHttpException(403);
-		$row = DebugInfo::model()->findByAttributes(array(
-			'id'=>$id, 'project_id'=>$projectId));
-		if($row === null)
+		// Single SQL UPDATE for the matching rows.
+		$newStatus = ($kind === 'crash')
+			? CrashReport::STATUS_PENDING_PROCESSING
+			: DebugInfo::STATUS_PENDING_PROCESSING;
+		$count = $ctx['model']->updateAll(
+			array('status' => $newStatus),
+			$ctx['condition'],
+			$ctx['params']
+		);
+
+		Yii::app()->user->setFlash('failed-retry-success',
+			"Re-queued $count " . ($kind === 'crash' ? 'crash report' : 'debug info file')
+			. ($count === 1 ? '' : 's') .
+			". Daemon will retry on the next poll cycle.");
+		$this->redirect($this->failedReturnUrl($req));
+	}
+
+	/**
+	 * POST /site/failedDelete
+	 *
+	 * Permanently delete failed items. Uses ActiveRecord delete()
+	 * (not raw DELETE) so beforeDelete()/afterDelete() hooks fire
+	 * and clean up the on-disk files referenced by the model.
+	 * Capped at 500 rows per request to stay under PHP timeouts;
+	 * if more rows match the user is told to click again.
+	 *
+	 * Inputs identical to actionFailedRetry.
+	 */
+	public function actionFailedDelete()
+	{
+		if(!Yii::app()->request->isPostRequest)
+			throw new CHttpException(405, 'POST required.');
+
+		$req = Yii::app()->request;
+		$kind = (string)$req->getPost('kind', '');
+		$id   = (int)   $req->getPost('id', 0);
+		$ids  = (array) $req->getPost('ids', array());
+		$all  = (string)$req->getPost('all', '') === '1';
+		$q    = trim((string)$req->getPost('q', ''));
+
+		$projectId = (int)Yii::app()->user->getCurProjectId();
+		if($projectId <= 0 || ($kind !== 'crash' && $kind !== 'debug'))
 		{
-			Yii::app()->user->setFlash('failed-retry-error',
-				"Debug info file #{$id} not found in current project.");
+			Yii::app()->user->setFlash('failed-retry-error', 'Invalid delete request.');
 			$this->redirect(array('site/failedReports'));
 			return;
 		}
-		$row->status = DebugInfo::STATUS_PENDING_PROCESSING;
-		$row->save(false, array('status'));
-		Yii::app()->user->setFlash('failed-retry-success',
-			"Debug info file #{$id} re-queued. Daemon will retry on the next poll cycle.");
-		$this->redirect(array('site/failedReports'));
+
+		$ctx = $this->buildFailedBulkContext($kind, $projectId, $id, $ids, $all, $q);
+		if($ctx['error'] !== null)
+		{
+			Yii::app()->user->setFlash('failed-retry-error', $ctx['error']);
+			$this->redirect(array('site/failedReports'));
+			return;
+		}
+
+		// Cap per click. AR delete() fires per-row hooks that unlink
+		// files; processing 5000 of those in one request risks PHP
+		// max_execution_time / FastCGI timeouts.
+		$cap = 500;
+		$criteria = new CDbCriteria();
+		$criteria->condition = $ctx['condition'];
+		$criteria->params    = $ctx['params'];
+		$criteria->limit     = $cap + 1;
+		$rows = $ctx['model']->findAll($criteria);
+
+		$hasMore = count($rows) > $cap;
+		if($hasMore) array_pop($rows);
+
+		$deleted = 0;
+		$errors  = 0;
+		foreach($rows as $row)
+		{
+			try {
+				if($row->delete()) $deleted++;
+				else               $errors++;
+			} catch(Exception $e) {
+				$errors++;
+				Yii::log('failed-delete row '.$row->id.': '.$e->getMessage(), 'warning');
+			}
+		}
+
+		$kindLabel = ($kind === 'crash') ? 'crash report' : 'debug info file';
+		$msg = "Deleted $deleted $kindLabel" . ($deleted === 1 ? '' : 's') . '.';
+		if($errors > 0) $msg .= " $errors could not be deleted (see logs).";
+		if($hasMore)    $msg .= " More rows match the filter; click Delete again to continue.";
+		Yii::app()->user->setFlash($errors === 0 ? 'failed-retry-success' : 'failed-retry-error', $msg);
+		$this->redirect($this->failedReturnUrl($req));
+	}
+
+	/**
+	 * Shared validation + WHERE-clause builder for the bulk retry /
+	 * delete endpoints. Returns
+	 *   array('error' => string|null, 'model' => CActiveRecord,
+	 *         'condition' => string, 'params' => array)
+	 *
+	 * Three input modes supported:
+	 *   single  -> id   given      -> WHERE id = :id
+	 *   bulk    -> ids[] given     -> WHERE id IN (...)
+	 *   all     -> all=1 given     -> WHERE status IN (failed-statuses)
+	 *                                  + free-text filter via EXISTS
+	 *                                    on tbl_processingerror.message
+	 *                                    matching the same shape as
+	 *                                    actionFailedReports().
+	 */
+	private function buildFailedBulkContext($kind, $projectId, $id, array $ids, $all, $q)
+	{
+		$user = Yii::app()->user;
+
+		if($kind === 'crash')
+		{
+			if(!$user->checkAccess('pperm_browse_some_crash_reports'))
+				throw new CHttpException(403);
+			$model     = CrashReport::model();
+			$statuses  = array(CrashReport::STATUS_INVALID);
+			$fileCol   = 'srcfilename';
+			$guidCol   = 'crashguid';
+			$peType    = ProcessingError::TYPE_CRASH_REPORT_ERROR;
+		}
+		else
+		{
+			if(!$user->checkAccess('pperm_browse_some_debug_info'))
+				throw new CHttpException(403);
+			$model     = DebugInfo::model();
+			$statuses  = array(DebugInfo::STATUS_INVALID);
+			$fileCol   = 'filename';
+			$guidCol   = 'guid';
+			$peType    = ProcessingError::TYPE_DEBUG_INFO_ERROR;
+		}
+
+		$tbl    = $model->tableName();
+		$peTbl  = ProcessingError::model()->tableName();
+		$statusCsv = implode(',', array_map('intval', $statuses));
+
+		// Single
+		if($id > 0)
+		{
+			return array(
+				'error'     => null,
+				'model'     => $model,
+				'condition' => "id = :id AND project_id = :pid AND status IN ($statusCsv)",
+				'params'    => array(':id'=>(int)$id, ':pid'=>$projectId),
+			);
+		}
+
+		// Bulk by selection
+		if(!empty($ids))
+		{
+			$cleanIds = array();
+			foreach($ids as $v) {
+				$v = (int)$v;
+				if($v > 0) $cleanIds[] = $v;
+			}
+			if(empty($cleanIds))
+				return array('error'=>'No items selected.', 'model'=>null,
+				             'condition'=>null, 'params'=>null);
+
+			$idCsv = implode(',', $cleanIds);
+			return array(
+				'error'     => null,
+				'model'     => $model,
+				'condition' => "id IN ($idCsv) AND project_id = :pid AND status IN ($statusCsv)",
+				'params'    => array(':pid'=>$projectId),
+			);
+		}
+
+		// All matching (optionally filtered by q)
+		if($all)
+		{
+			$cond   = "project_id = :pid AND status IN ($statusCsv)";
+			$params = array(':pid'=>$projectId);
+			if($q !== '')
+			{
+				$like = '%' . addcslashes($q, '\\%_') . '%';
+				$cond .= " AND (
+					$fileCol LIKE :search_q OR
+					$guidCol LIKE :search_q OR
+					EXISTS (SELECT 1 FROM $peTbl pe2
+					         WHERE pe2.srcid = $tbl.id
+					           AND pe2.type  = " . (int)$peType . "
+					           AND pe2.message LIKE :search_q)
+				)";
+				$params[':search_q'] = $like;
+			}
+			return array(
+				'error'     => null,
+				'model'     => $model,
+				'condition' => $cond,
+				'params'    => $params,
+			);
+		}
+
+		return array('error'=>'No items targeted.', 'model'=>null,
+		             'condition'=>null, 'params'=>null);
+	}
+
+	/**
+	 * Redirect target after a bulk action: try to preserve the
+	 * filter/sort/page so the user lands back on the same view.
+	 * Falls back to bare /site/failedReports if no return URL was POSTed
+	 * or it looks suspicious (open-redirect guard).
+	 */
+	private function failedReturnUrl($req)
+	{
+		$back = (string)$req->getPost('return', '');
+		if($back !== '' && strncmp($back, '/', 1) === 0
+			&& strpos($back, "\n") === false && strpos($back, "\r") === false) {
+			return $back;
+		}
+		return array('site/failedReports');
 	}
 }
