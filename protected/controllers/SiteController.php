@@ -51,7 +51,8 @@ class SiteController extends Controller
 				'users'=>array('?'),
 			),
 			array('allow', // Allow authenticated users to index, logout, reset password
-				'actions'=>array('index', 'logout', 'resetPassword', 'setCurProject', 'checkDaemon'),
+				'actions'=>array('index', 'logout', 'resetPassword', 'setCurProject', 'checkDaemon',
+				                 'failedReports', 'failedRetry'),
 				'users'=>array('@'),
 			),			
 			array('allow', // Allow admin to access admin panel
@@ -548,5 +549,158 @@ class SiteController extends Controller
 		// Refresh the refferer page
 		$urlReferrer = Yii::app()->request->urlReferrer;
 		$this->redirect($urlReferrer);
+	}
+
+	/**
+	 * Show every crash report and debug-info file in the current
+	 * project that the daemon could not process. Each row shows the
+	 * most recent processing-error message so the user can see why
+	 * the daemon rejected it without clicking through to detail.
+	 *
+	 * Project-scoped via the user's current project. Anyone with at
+	 * least one of the relevant browse permissions sees the page;
+	 * the two grids are individually gated and degrade to a
+	 * "no permission" notice when neither is held.
+	 */
+	public function actionFailedReports()
+	{
+		$this->sidebarActiveItem = 'FailedReports';
+
+		$user = Yii::app()->user;
+		$projectId = (int)$user->getCurProjectId();
+		$canCrash  = (bool)$user->checkAccess('pperm_browse_some_crash_reports');
+		$canDebug  = (bool)$user->checkAccess('pperm_browse_some_debug_info');
+
+		$db = Yii::app()->db;
+		$peTbl = ProcessingError::model()->tableName();
+
+		// Failed crash reports + their most-recent error message.
+		$crashProvider = null;
+		$crashTotal = 0;
+		if($projectId > 0 && $canCrash)
+		{
+			$crCriteria = new CDbCriteria();
+			$crCriteria->select = array(
+				'*',
+				'(SELECT pe.message FROM '.$peTbl.' pe '.
+				' WHERE pe.type = '.(int)ProcessingError::TYPE_CRASH_REPORT_ERROR.
+				' AND pe.srcid = t.id ORDER BY pe.id DESC LIMIT 1) AS last_error',
+			);
+			$crCriteria->condition = 't.project_id = :pid AND t.status = :st';
+			$crCriteria->params    = array(':pid'=>$projectId, ':st'=>CrashReport::STATUS_INVALID);
+			$crCriteria->order     = 't.received DESC';
+
+			$crashProvider = new CActiveDataProvider('CrashReport', array(
+				'criteria'   => $crCriteria,
+				'pagination' => array('pageSize'=>50, 'pageVar'=>'cr-page'),
+				'sort'       => false,
+			));
+			$crashTotal = $crashProvider->getTotalItemCount();
+		}
+
+		// Failed debug-info files + their most-recent error message.
+		$debugProvider = null;
+		$debugTotal = 0;
+		if($projectId > 0 && $canDebug)
+		{
+			$diCriteria = new CDbCriteria();
+			$diCriteria->select = array(
+				'*',
+				'(SELECT pe.message FROM '.$peTbl.' pe '.
+				' WHERE pe.type = '.(int)ProcessingError::TYPE_DEBUG_INFO_ERROR.
+				' AND pe.srcid = t.id ORDER BY pe.id DESC LIMIT 1) AS last_error',
+			);
+			$diCriteria->condition = 't.project_id = :pid AND t.status = :st';
+			$diCriteria->params    = array(':pid'=>$projectId, ':st'=>DebugInfo::STATUS_INVALID);
+			$diCriteria->order     = 't.dateuploaded DESC';
+
+			$debugProvider = new CActiveDataProvider('DebugInfo', array(
+				'criteria'   => $diCriteria,
+				'pagination' => array('pageSize'=>50, 'pageVar'=>'di-page'),
+				'sort'       => false,
+			));
+			$debugTotal = $debugProvider->getTotalItemCount();
+		}
+
+		$this->render('failedReports', array(
+			'crashProvider' => $crashProvider,
+			'debugProvider' => $debugProvider,
+			'crashTotal'    => $crashTotal,
+			'debugTotal'    => $debugTotal,
+			'projectId'     => $projectId,
+			'canCrash'      => $canCrash,
+			'canDebug'      => $canDebug,
+		));
+	}
+
+	/**
+	 * POST /site/failedRetry
+	 *
+	 * Re-queue a single failed item by flipping its status back to
+	 * Pending. The daemon picks it up on the next poll cycle.
+	 * Existing processingerror rows are NOT deleted - the user can
+	 * still see the old failure reason; on a successful retry the
+	 * status will move on to Processed and a fresh error appears
+	 * only if it fails again.
+	 *
+	 * Inputs (POST):
+	 *   kind = "crash" | "debug"
+	 *   id   = integer primary key in the matching table
+	 */
+	public function actionFailedRetry()
+	{
+		if(!Yii::app()->request->isPostRequest)
+			throw new CHttpException(405, 'POST required.');
+
+		$kind = (string)Yii::app()->request->getPost('kind', '');
+		$id   = (int)   Yii::app()->request->getPost('id',   0);
+		$projectId = (int)Yii::app()->user->getCurProjectId();
+		$user = Yii::app()->user;
+
+		if($id <= 0 || ($kind !== 'crash' && $kind !== 'debug'))
+		{
+			Yii::app()->user->setFlash('failed-retry-error', 'Invalid retry request.');
+			$this->redirect(array('site/failedReports'));
+			return;
+		}
+
+		if($kind === 'crash')
+		{
+			if(!$user->checkAccess('pperm_browse_some_crash_reports'))
+				throw new CHttpException(403);
+			$row = CrashReport::model()->findByAttributes(array(
+				'id'=>$id, 'project_id'=>$projectId));
+			if($row === null)
+			{
+				Yii::app()->user->setFlash('failed-retry-error',
+					"Crash report #{$id} not found in current project.");
+				$this->redirect(array('site/failedReports'));
+				return;
+			}
+			$row->status = CrashReport::STATUS_PENDING_PROCESSING;
+			$row->save(false, array('status'));
+			Yii::app()->user->setFlash('failed-retry-success',
+				"Crash report #{$id} re-queued. Daemon will retry on the next poll cycle.");
+			$this->redirect(array('site/failedReports'));
+			return;
+		}
+
+		// kind === 'debug'
+		if(!$user->checkAccess('pperm_browse_some_debug_info'))
+			throw new CHttpException(403);
+		$row = DebugInfo::model()->findByAttributes(array(
+			'id'=>$id, 'project_id'=>$projectId));
+		if($row === null)
+		{
+			Yii::app()->user->setFlash('failed-retry-error',
+				"Debug info file #{$id} not found in current project.");
+			$this->redirect(array('site/failedReports'));
+			return;
+		}
+		$row->status = DebugInfo::STATUS_PENDING_PROCESSING;
+		$row->save(false, array('status'));
+		Yii::app()->user->setFlash('failed-retry-success',
+			"Debug info file #{$id} re-queued. Daemon will retry on the next poll cycle.");
+		$this->redirect(array('site/failedReports'));
 	}
 }

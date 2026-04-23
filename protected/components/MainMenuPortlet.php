@@ -46,9 +46,20 @@ class MainMenuPortlet extends CPortlet
 				),			        
 				array(
 					'label'=>'Debug Info', 
-					'url'=>array('debugInfo/index'), 
+					'url'=>array('debugInfo/index'),
 					'active'=>$this->activeItem=='DebugInfo', 
 					'visible'=>Yii::app()->user->checkAccess('pperm_browse_some_debug_info')
+				),
+				array(
+					'label'=>'Failed Reports',
+					'url'=>array('site/failedReports'),
+					'active'=>$this->activeItem=='FailedReports',
+					// Visible to anyone with at least one of the relevant
+					// browse permissions; the page itself gates each
+					// section individually.
+					'visible'=>
+						   Yii::app()->user->checkAccess('pperm_browse_some_crash_reports')
+						|| Yii::app()->user->checkAccess('pperm_browse_some_debug_info'),
 				),
                 array(
                     'label'=>'Serials Info',
