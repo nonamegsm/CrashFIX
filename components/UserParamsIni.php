@@ -27,7 +27,8 @@ final class UserParamsIni
 
     /**
      * @param array<string, string> $dbParams   keys: db_connection_string, db_username, …
-     * @param array<string, string> $storageParams keys: storage_layout, storage_base_path (optional)
+     * @param array<string, string> $storageParams keys: storage_layout, storage_base_path (optional),
+     *        installer_profile (optional, fresh|existing_yii1 — written by the web installer)
      */
     public static function write(string $path, array $dbParams, array $storageParams = []): void
     {

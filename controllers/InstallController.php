@@ -14,12 +14,18 @@ use app\components\UserParamsIni;
 /**
  * Web installer for CrashFix.
  *
- * Supports a clean **existing Yii1 / legacy database** path: connect to the
- * same MySQL schema, optionally point file storage at the old
- * `protected/data` tree via {@see UserParamsIni::STORAGE_LAYOUT_LEGACY}, and
- * run migrations in **adopt** mode (benign “already exists” / duplicate errors
- * are treated as already applied so schema drift from production is handled
- * without hand-editing SQL).
+ * Setup paths:
+ *
+ * - **New installation** — empty database; default {@see UserParamsIni::STORAGE_LAYOUT_PROJECT}
+ *   under `data/`, or optionally the same legacy on-disk layout if you already
+ *   copied Yii1 `protected/data` (reports/symbols) but are creating schema from migrations.
+ *
+ * - **Existing Yii1** — reuse the live CrashFix MySQL schema, point storage at the real
+ *   `protected/data` tree, run migrations in **adopt** mode (benign “already exists” /
+ *   duplicate errors are recorded as applied).
+ *
+ * {@see self::INI_INSTALLER_PROFILE} is stored in `user_params.ini` so migrate / admin
+ * steps do not confuse “legacy files only” with “Yii1 DB upgrade” when the session expires.
  */
 class InstallController extends Controller
 {
@@ -28,6 +34,9 @@ class InstallController extends Controller
 
     /** @var string Session key: "fresh" | "existing_yii1" */
     private const SESSION_PROFILE = 'installer_profile';
+
+    /** @var string Persisted in user_params.ini [storage] so wizard steps stay correct if the session expires */
+    private const INI_INSTALLER_PROFILE = 'installer_profile';
 
     public function beforeAction($action)
     {
@@ -92,9 +101,14 @@ class InstallController extends Controller
         $existing = UserParamsIni::readFlat(Yii::getAlias('@app/config/user_params.ini'));
         $model->install_profile = Yii::$app->session->get(self::SESSION_PROFILE);
         if ($model->install_profile === null || !in_array($model->install_profile, ['fresh', 'existing_yii1'], true)) {
-            $model->install_profile = (($existing['storage_layout'] ?? '') === UserParamsIni::STORAGE_LAYOUT_LEGACY)
-                ? 'existing_yii1'
-                : 'fresh';
+            $fromIni = $existing[self::INI_INSTALLER_PROFILE] ?? '';
+            if ($fromIni === 'fresh' || $fromIni === 'existing_yii1') {
+                $model->install_profile = $fromIni;
+            } else {
+                $model->install_profile = (($existing['storage_layout'] ?? '') === UserParamsIni::STORAGE_LAYOUT_LEGACY)
+                    ? 'existing_yii1'
+                    : 'fresh';
+            }
         }
 
         $model->host = $this->extractDsnPart($existing['db_connection_string'] ?? '', 'host') ?: '127.0.0.1';
@@ -106,29 +120,9 @@ class InstallController extends Controller
 
         if ($model->load(Yii::$app->request->post())) {
             if ($model->install_profile === 'existing_yii1') {
-                $path = trim((string) $model->legacy_data_path);
-                if ($path === '') {
-                    $model->addError('legacy_data_path', 'Enter the full path to the old site’s protected/data folder (Yii1 CrashFix).');
-                } elseif (!is_dir($path)) {
-                    $model->addError('legacy_data_path', 'That path is not a directory or is not readable by PHP.');
-                } else {
-                    $hints = ['crashReports', 'debugInfo'];
-                    $found = false;
-                    foreach ($hints as $h) {
-                        if (is_dir($path . DIRECTORY_SEPARATOR . $h)) {
-                            $found = true;
-                            break;
-                        }
-                    }
-                    if (!$found) {
-                        $model->addError(
-                            'legacy_data_path',
-                            'No crashReports/ or debugInfo/ folder found inside — double-check this is the Yii1 `protected/data` directory.'
-                        );
-                    }
-                }
+                $this->validateLegacyDataPathField($model, true);
             } else {
-                $model->legacy_data_path = '';
+                $this->validateLegacyDataPathField($model, false);
             }
 
             if (!$model->hasErrors() && $model->validate()) {
@@ -152,9 +146,18 @@ class InstallController extends Controller
 
                     $storageLayout = UserParamsIni::STORAGE_LAYOUT_PROJECT;
                     $storageBase = '';
+                    $legacyPathNorm = '';
+                    $trimLegacy = trim((string) $model->legacy_data_path);
+                    if ($trimLegacy !== '') {
+                        $legacyPathNorm = rtrim(str_replace('/', DIRECTORY_SEPARATOR, $trimLegacy), '\\/');
+                    }
                     if ($model->install_profile === 'existing_yii1') {
                         $storageLayout = UserParamsIni::STORAGE_LAYOUT_LEGACY;
-                        $storageBase = rtrim(str_replace('/', DIRECTORY_SEPARATOR, trim($model->legacy_data_path)), '\\/');
+                        $storageBase = $legacyPathNorm;
+                    } elseif ($legacyPathNorm !== '') {
+                        // New DB + optional copied Yii1 protected/data (reports on disk only).
+                        $storageLayout = UserParamsIni::STORAGE_LAYOUT_LEGACY;
+                        $storageBase = $legacyPathNorm;
                     }
 
                     UserParamsIni::write(Yii::getAlias('@app/config/user_params.ini'), [
@@ -165,6 +168,7 @@ class InstallController extends Controller
                     ], [
                         'storage_layout' => $storageLayout,
                         'storage_base_path' => $storageBase,
+                        self::INI_INSTALLER_PROFILE => $model->install_profile,
                     ]);
 
                     Yii::$app->session->set(self::SESSION_PROFILE, $model->install_profile);
@@ -303,16 +307,62 @@ class InstallController extends Controller
      */
     private function getInstallerProfile(): string
     {
+        $ini = UserParamsIni::readFlat(Yii::getAlias('@app/config/user_params.ini'));
+        $fromIni = $ini[self::INI_INSTALLER_PROFILE] ?? '';
+        if ($fromIni === 'existing_yii1' || $fromIni === 'fresh') {
+            return $fromIni;
+        }
+
         $fromSession = Yii::$app->session->get(self::SESSION_PROFILE);
         if ($fromSession === 'existing_yii1' || $fromSession === 'fresh') {
             return $fromSession;
         }
 
-        $ini = UserParamsIni::readFlat(Yii::getAlias('@app/config/user_params.ini'));
-
+        // Older installs: no installer_profile key; legacy layout implied Yii1 DB adoption.
         return (($ini['storage_layout'] ?? '') === UserParamsIni::STORAGE_LAYOUT_LEGACY)
             ? 'existing_yii1'
             : 'fresh';
+    }
+
+    /**
+     * @param \yii\base\DynamicModel $model
+     */
+    private function validateLegacyDataPathField($model, bool $required): void
+    {
+        $path = trim((string) $model->legacy_data_path);
+        if ($path === '') {
+            if ($required) {
+                $model->addError(
+                    'legacy_data_path',
+                    'Enter the full path to the old site’s protected/data folder (Yii1 CrashFix).'
+                );
+            } else {
+                $model->legacy_data_path = '';
+            }
+
+            return;
+        }
+
+        if (!is_dir($path)) {
+            $model->addError('legacy_data_path', 'That path is not a directory or is not readable by PHP.');
+
+            return;
+        }
+
+        $hints = ['crashReports', 'debugInfo'];
+        $found = false;
+        foreach ($hints as $h) {
+            if (is_dir($path . DIRECTORY_SEPARATOR . $h)) {
+                $found = true;
+                break;
+            }
+        }
+        if (!$found) {
+            $model->addError(
+                'legacy_data_path',
+                'No crashReports/ or debugInfo/ folder found inside — double-check this is the Yii1 `protected/data` directory.'
+            );
+        }
     }
 
     /**
