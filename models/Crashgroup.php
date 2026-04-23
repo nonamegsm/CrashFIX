@@ -17,7 +17,7 @@ use Yii;
  */
 class Crashgroup extends \yii\db\ActiveRecord
 {
-
+    const STATUS_NEW = 1;
 
     /**
      * {@inheritdoc}

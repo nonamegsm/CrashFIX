@@ -26,6 +26,11 @@ $config = [
             ],
         ],
         'db' => $db,
+        'daemon' => [
+            'class' => 'app\components\Daemon',
+            'host' => '127.0.0.1',
+            'servicePort' => '50',
+        ],
         'storage' => [
             'class' => 'app\components\Storage',
             'basePath' => '@app/data',

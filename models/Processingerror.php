@@ -55,4 +55,17 @@ class Processingerror extends \yii\db\ActiveRecord
         ];
     }
 
+    public static function record(int $type, int $srcid, string $message): bool
+    {
+        $row = new static();
+        $row->type = $type;
+        $row->srcid = $srcid;
+        $row->message = $message;
+        if (!$row->save()) {
+            Yii::error('Could not save processing error record', 'poll');
+            return false;
+        }
+        return true;
+    }
+
 }

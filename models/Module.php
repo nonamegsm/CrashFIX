@@ -37,6 +37,7 @@ class Module extends \yii\db\ActiveRecord
             [['crashreport_id', 'name', 'sym_load_status', 'file_version'], 'required'],
             [['crashreport_id', 'sym_load_status', 'loaded_debug_info_id', 'timestamp'], 'integer'],
             [['name'], 'string', 'max' => 512],
+            [['matching_pdb_guid'], 'string', 'max' => 256],
             [['file_version'], 'string', 'max' => 32],
         ];
     }

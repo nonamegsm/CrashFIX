@@ -28,6 +28,8 @@ use app\models\Lookup;
  */
 class Debuginfo extends \yii\db\ActiveRecord
 {
+    use DebuginfoPollTrait;
+
     // Status codes match the seeded `lookup` table (DebugInfoStatus).
     const STATUS_WAITING             = 1;
     const STATUS_PROCESSING          = 2;
@@ -124,6 +126,8 @@ class Debuginfo extends \yii\db\ActiveRecord
             case self::STATUS_INVALID:            return 'Invalid';
             case self::STATUS_UNSUPPORTED_FORMAT: return 'Unsupported format';
             case self::STATUS_PARTIALLY_MATCHED:  return 'Ready (partial)';
+            case self::STATUS_PENDING_DELETE:     return 'Pending Delete';
+            case self::STATUS_DELETE_IN_PROGRESS: return 'Deleting';
         }
         return 'status ' . (int) $this->status;
     }

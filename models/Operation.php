@@ -19,7 +19,34 @@ use Yii;
  */
 class Operation extends \yii\db\ActiveRecord
 {
+    public const STATUS_STARTED   = 1;
+    public const STATUS_SUCCEEDED = 2;
+    public const STATUS_FAILED    = 3;
 
+    public const OPTYPE_IMPORTPDB            = 1;
+    public const OPTYPE_PROCESS_CRASH_REPORT = 2;
+    public const OPTYPE_DELETE_DEBUG_INFO    = 3;
+
+    /**
+     * Trim the operations log to roughly $topCount newest rows (legacy
+     * PollCommand::deleteOldOperations semantics).
+     */
+    public static function deleteOldOperations(int $topCount = 1000): void
+    {
+        $totalCount = (int) static::find()->count();
+        $limitCount = $totalCount - $topCount;
+        if ($limitCount <= 0) {
+            return;
+        }
+        $ops = static::find()
+            ->where(['<>', 'status', self::STATUS_STARTED])
+            ->orderBy(['timestamp' => SORT_DESC])
+            ->limit($limitCount)
+            ->all();
+        foreach ($ops as $op) {
+            $op->delete();
+        }
+    }
 
     /**
      * {@inheritdoc}

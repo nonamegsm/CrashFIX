@@ -77,4 +77,28 @@ class Thread extends \yii\db\ActiveRecord
         }
         return $bottom->und_symbol_name ?: ($bottom->symbol_name ?: '');
     }
+
+    /**
+     * Uppermost frame with an undecorated symbol, skipping CrashRpt modules.
+     * Port of Yii1 Thread::getExceptionStackFrameTitle.
+     */
+    public function getExceptionStackFrameTitle(): string
+    {
+        $frames = Stackframe::find()
+            ->where(['thread_id' => $this->id])
+            ->andWhere(['is not', 'und_symbol_name', null])
+            ->orderBy(['id' => SORT_ASC])
+            ->all();
+
+        $title = '';
+        foreach ($frames as $stackFrame) {
+            $title = $stackFrame->getTitle();
+            $module = $stackFrame->module;
+            if ($module !== null && preg_match('/^CrashRpt([0-9]{4})(d{0,1}){0,1}\.dll$/i', $module->name)) {
+                continue;
+            }
+            break;
+        }
+        return $title;
+    }
 }

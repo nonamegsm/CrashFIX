@@ -45,6 +45,8 @@ use Yii;
  */
 class Crashreport extends \yii\db\ActiveRecord
 {
+    use CrashreportPollTrait;
+
     public $fileAttachment;
     public $appversionStr;
 
