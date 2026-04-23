@@ -7,9 +7,25 @@
 /* @var $projectId  int */
 /* @var $canCrash   bool */
 /* @var $canDebug   bool */
+/* @var $crashQ     string */
+/* @var $debugQ     string */
 
 $this->pageTitle = Yii::app()->name . ' - Failed Reports';
 $this->breadcrumbs = array('Failed Reports');
+
+// Preserve cross-section query params on submit so searching one
+// grid does not clobber pagination/sort on the other.
+$req = Yii::app()->request;
+$preserve = function(array $exclude) use ($req) {
+    $out = '';
+    foreach (array('cr-q', 'cr-page', 'cr-sort', 'di-q', 'di-page', 'di-sort') as $k) {
+        if (in_array($k, $exclude, true)) continue;
+        $v = $req->getParam($k);
+        if ($v === null || $v === '') continue;
+        $out .= CHtml::hiddenField($k, $v);
+    }
+    return $out;
+};
 ?>
 
 <style>
@@ -21,6 +37,13 @@ $this->breadcrumbs = array('Failed Reports');
 .cf-failed-meta    { font-size: 11px; color: #666; }
 .cf-failed-section h3 { margin-top: 6px; }
 .cf-retry-btn      { padding: 2px 8px; font-size: 11px; }
+.cf-search-row     { margin-bottom: 8px; }
+.cf-search-row input[type=text] { width: 380px; padding: 3px 6px; }
+.cf-search-row button,
+.cf-search-row a.cf-clear { padding: 3px 10px; font-size: 12px; }
+.cf-active-filter  { display: inline-block; margin-left: 8px; padding: 2px 8px;
+                     background: #fff3cd; color: #856404; border-radius: 4px;
+                     font-size: 11px; }
 .flash-success     { padding: 8px 12px; background: #dff0d8; color: #2c662d;
                      border: 1px solid #b6dfb1; border-radius: 4px; margin-bottom: 10px; }
 .flash-error       { padding: 8px 12px; background: #f2dede; color: #952422;
@@ -35,6 +58,8 @@ $this->breadcrumbs = array('Failed Reports');
     <code>tbl_processingerror</code>. Use <strong>Retry</strong> to re-queue an
     item for the next daemon poll cycle (status flips back to Pending; the
     existing error history is preserved so you can still see what went wrong).
+    Click any column header to sort. The search box matches filename, GUID,
+    and any historical error-message text.
 </p>
 
 <?php if(Yii::app()->user->hasFlash('failed-retry-success')): ?>
@@ -53,10 +78,38 @@ $this->breadcrumbs = array('Failed Reports');
     <div class="cf-failed-section span-26 last">
         <h3>Failed crash reports
             <span style="color:#a00;">(<?php echo (int)$crashTotal; ?>)</span>
+            <?php if($crashQ !== ''): ?>
+                <span class="cf-active-filter">
+                    filter: <strong><?php echo CHtml::encode($crashQ); ?></strong>
+                </span>
+            <?php endif; ?>
         </h3>
 
+        <div class="cf-search-row">
+            <?php echo CHtml::beginForm('', 'get'); ?>
+                <?php echo CHtml::textField('cr-q', $crashQ,
+                    array('placeholder' => 'Search by filename, GUID, or error message...')); ?>
+                <?php echo CHtml::submitButton('Search'); ?>
+                <?php if($crashQ !== ''): ?>
+                    <?php echo CHtml::link('Clear',
+                        $this->createUrl('site/failedReports',
+                            array_filter(array(
+                                'di-q'    => $req->getParam('di-q'),
+                                'di-page' => $req->getParam('di-page'),
+                                'di-sort' => $req->getParam('di-sort'),
+                            ), 'strlen')),
+                        array('class' => 'cf-clear')); ?>
+                <?php endif; ?>
+                <?php echo $preserve(array('cr-q', 'cr-page', 'cr-sort')); ?>
+            <?php echo CHtml::endForm(); ?>
+        </div>
+
         <?php if((int)$crashTotal === 0): ?>
-            <div class="cf-failed-empty">No failed crash reports in this project. Healthy.</div>
+            <div class="cf-failed-empty">
+                <?php echo $crashQ === ''
+                    ? 'No failed crash reports in this project. Healthy.'
+                    : 'No failed crash reports match your search.'; ?>
+            </div>
         <?php else: ?>
             <?php $this->widget('zii.widgets.grid.CGridView', array(
                 'dataProvider' => $crashProvider,
@@ -64,6 +117,7 @@ $this->breadcrumbs = array('Failed Reports');
                 'template' => "{items}\n{pager}\n{summary}",
                 'columns' => array(
                     array(
+                        'name'   => 'id',
                         'header' => 'ID',
                         'type'   => 'raw',
                         'value'  => 'CHtml::link("#".(int)$data->id,
@@ -72,6 +126,7 @@ $this->breadcrumbs = array('Failed Reports');
                         'cssClassExpression' => '"column-right-align"',
                     ),
                     array(
+                        'name'   => 'srcfilename',
                         'header' => 'File',
                         'type'   => 'text',
                         'value'  => '$data->srcfilename
@@ -79,6 +134,7 @@ $this->breadcrumbs = array('Failed Reports');
                                        : ("crashguid ".substr((string)$data->crashguid, 0, 8))',
                     ),
                     array(
+                        'name'   => 'received',
                         'header' => 'Received',
                         'type'   => 'text',
                         'value'  => '(int)$data->received > 0
@@ -86,6 +142,7 @@ $this->breadcrumbs = array('Failed Reports');
                                        : "-"',
                     ),
                     array(
+                        'name'   => 'filesize',
                         'header' => 'Size',
                         'type'   => 'text',
                         'value'  => 'MiscHelpers::fileSizeToStr((int)$data->filesize)',
@@ -132,10 +189,38 @@ $this->breadcrumbs = array('Failed Reports');
     <div class="cf-failed-section span-26 last">
         <h3>Failed debug-info files
             <span style="color:#a00;">(<?php echo (int)$debugTotal; ?>)</span>
+            <?php if($debugQ !== ''): ?>
+                <span class="cf-active-filter">
+                    filter: <strong><?php echo CHtml::encode($debugQ); ?></strong>
+                </span>
+            <?php endif; ?>
         </h3>
 
+        <div class="cf-search-row">
+            <?php echo CHtml::beginForm('', 'get'); ?>
+                <?php echo CHtml::textField('di-q', $debugQ,
+                    array('placeholder' => 'Search by filename, GUID, or error message...')); ?>
+                <?php echo CHtml::submitButton('Search'); ?>
+                <?php if($debugQ !== ''): ?>
+                    <?php echo CHtml::link('Clear',
+                        $this->createUrl('site/failedReports',
+                            array_filter(array(
+                                'cr-q'    => $req->getParam('cr-q'),
+                                'cr-page' => $req->getParam('cr-page'),
+                                'cr-sort' => $req->getParam('cr-sort'),
+                            ), 'strlen')),
+                        array('class' => 'cf-clear')); ?>
+                <?php endif; ?>
+                <?php echo $preserve(array('di-q', 'di-page', 'di-sort')); ?>
+            <?php echo CHtml::endForm(); ?>
+        </div>
+
         <?php if((int)$debugTotal === 0): ?>
-            <div class="cf-failed-empty">No failed debug-info files in this project. Healthy.</div>
+            <div class="cf-failed-empty">
+                <?php echo $debugQ === ''
+                    ? 'No failed debug-info files in this project. Healthy.'
+                    : 'No failed debug-info files match your search.'; ?>
+            </div>
         <?php else: ?>
             <?php $this->widget('zii.widgets.grid.CGridView', array(
                 'dataProvider' => $debugProvider,
@@ -143,6 +228,7 @@ $this->breadcrumbs = array('Failed Reports');
                 'template' => "{items}\n{pager}\n{summary}",
                 'columns' => array(
                     array(
+                        'name'   => 'id',
                         'header' => 'ID',
                         'type'   => 'raw',
                         'value'  => 'CHtml::link("#".(int)$data->id,
@@ -151,6 +237,7 @@ $this->breadcrumbs = array('Failed Reports');
                         'cssClassExpression' => '"column-right-align"',
                     ),
                     array(
+                        'name'   => 'filename',
                         'header' => 'File',
                         'type'   => 'text',
                         'value'  => '(string)$data->filename',
@@ -163,11 +250,13 @@ $this->breadcrumbs = array('Failed Reports');
                                        : ((string)$data->format !== "" ? $data->format : "detecting...")',
                     ),
                     array(
+                        'name'   => 'status',
                         'header' => 'Status',
                         'type'   => 'text',
                         'value'  => '$data->getStatusStr()',
                     ),
                     array(
+                        'name'   => 'dateuploaded',
                         'header' => 'Uploaded',
                         'type'   => 'text',
                         'value'  => '(int)$data->dateuploaded > 0

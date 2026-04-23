@@ -571,10 +571,37 @@ class SiteController extends Controller
 		$canCrash  = (bool)$user->checkAccess('pperm_browse_some_crash_reports');
 		$canDebug  = (bool)$user->checkAccess('pperm_browse_some_debug_info');
 
+		// Free-text search params (one per grid). Distinct names so
+		// search/sort/page on one section never resets the other.
+		$req = Yii::app()->request;
+		$crashQ = trim((string)$req->getParam('cr-q', ''));
+		$debugQ = trim((string)$req->getParam('di-q', ''));
+
 		$db = Yii::app()->db;
 		$peTbl = ProcessingError::model()->tableName();
 
-		// Failed crash reports + their most-recent error message.
+		// Helper closure: builds the OR clause that matches filename /
+		// guid / any historical processingerror.message via EXISTS
+		// subquery. EXISTS keeps the filter as a single SQL pass and
+		// avoids HAVING-vs-WHERE alias scoping problems with
+		// `last_error`.
+		$buildSearchCondition = function($q, $fileCol, $guidCol, $peType, $peTbl) {
+			if ($q === '') return null;
+			$like = '%' . addcslashes($q, '\\%_') . '%';
+			return array(
+				'condition' => "(
+					t.{$fileCol} LIKE :search_q OR
+					t.{$guidCol} LIKE :search_q OR
+					EXISTS (SELECT 1 FROM {$peTbl} pe2
+					         WHERE pe2.srcid = t.id
+					           AND pe2.type  = " . (int)$peType . "
+					           AND pe2.message LIKE :search_q)
+				)",
+				'params' => array(':search_q' => $like),
+			);
+		};
+
+		// ---- Failed crash reports -----------------------------------
 		$crashProvider = null;
 		$crashTotal = 0;
 		if($projectId > 0 && $canCrash)
@@ -588,17 +615,32 @@ class SiteController extends Controller
 			);
 			$crCriteria->condition = 't.project_id = :pid AND t.status = :st';
 			$crCriteria->params    = array(':pid'=>$projectId, ':st'=>CrashReport::STATUS_INVALID);
-			$crCriteria->order     = 't.received DESC';
+
+			$srch = $buildSearchCondition($crashQ, 'srcfilename', 'crashguid',
+				ProcessingError::TYPE_CRASH_REPORT_ERROR, $peTbl);
+			if ($srch !== null) {
+				$crCriteria->condition .= ' AND ' . $srch['condition'];
+				$crCriteria->params = array_merge($crCriteria->params, $srch['params']);
+			}
 
 			$crashProvider = new CActiveDataProvider('CrashReport', array(
 				'criteria'   => $crCriteria,
 				'pagination' => array('pageSize'=>50, 'pageVar'=>'cr-page'),
-				'sort'       => false,
+				'sort'       => array(
+					'sortVar'      => 'cr-sort',
+					'defaultOrder' => 't.received DESC',
+					'attributes'   => array(
+						'id'          => array('asc'=>'t.id ASC',          'desc'=>'t.id DESC'),
+						'srcfilename' => array('asc'=>'t.srcfilename ASC', 'desc'=>'t.srcfilename DESC'),
+						'received'    => array('asc'=>'t.received ASC',    'desc'=>'t.received DESC'),
+						'filesize'    => array('asc'=>'t.filesize ASC',    'desc'=>'t.filesize DESC'),
+					),
+				),
 			));
 			$crashTotal = $crashProvider->getTotalItemCount();
 		}
 
-		// Failed debug-info files + their most-recent error message.
+		// ---- Failed debug-info files --------------------------------
 		$debugProvider = null;
 		$debugTotal = 0;
 		if($projectId > 0 && $canDebug)
@@ -612,12 +654,28 @@ class SiteController extends Controller
 			);
 			$diCriteria->condition = 't.project_id = :pid AND t.status = :st';
 			$diCriteria->params    = array(':pid'=>$projectId, ':st'=>DebugInfo::STATUS_INVALID);
-			$diCriteria->order     = 't.dateuploaded DESC';
+
+			$srch = $buildSearchCondition($debugQ, 'filename', 'guid',
+				ProcessingError::TYPE_DEBUG_INFO_ERROR, $peTbl);
+			if ($srch !== null) {
+				$diCriteria->condition .= ' AND ' . $srch['condition'];
+				$diCriteria->params = array_merge($diCriteria->params, $srch['params']);
+			}
 
 			$debugProvider = new CActiveDataProvider('DebugInfo', array(
 				'criteria'   => $diCriteria,
 				'pagination' => array('pageSize'=>50, 'pageVar'=>'di-page'),
-				'sort'       => false,
+				'sort'       => array(
+					'sortVar'      => 'di-sort',
+					'defaultOrder' => 't.dateuploaded DESC',
+					'attributes'   => array(
+						'id'           => array('asc'=>'t.id ASC',           'desc'=>'t.id DESC'),
+						'filename'     => array('asc'=>'t.filename ASC',     'desc'=>'t.filename DESC'),
+						'status'       => array('asc'=>'t.status ASC',       'desc'=>'t.status DESC'),
+						'dateuploaded' => array('asc'=>'t.dateuploaded ASC', 'desc'=>'t.dateuploaded DESC'),
+						'filesize'     => array('asc'=>'t.filesize ASC',     'desc'=>'t.filesize DESC'),
+					),
+				),
 			));
 			$debugTotal = $debugProvider->getTotalItemCount();
 		}
@@ -630,6 +688,8 @@ class SiteController extends Controller
 			'projectId'     => $projectId,
 			'canCrash'      => $canCrash,
 			'canDebug'      => $canDebug,
+			'crashQ'        => $crashQ,
+			'debugQ'        => $debugQ,
 		));
 	}
 
