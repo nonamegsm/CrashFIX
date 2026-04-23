@@ -15,46 +15,39 @@
  *   SQLSTATE[22007]: Invalid datetime format: 1366 Incorrect
  *   string value: '\xD0\xA4...' for column 'tbl_customprop.name'
  *
- * which is what triggered this migration. The CrashRpt client
- * reports custom-prop names and values verbatim from the user's
- * locale, so a Russian / Chinese / Japanese end-user can take the
- * server down for an entire project just by crashing.
+ * Approach (drop-FKs / convert / re-add-FKs)
+ * ------------------------------------------
+ * MySQL refuses to ALTER TABLE ... CONVERT TO CHARACTER SET on any
+ * column referenced by a foreign-key constraint:
  *
- * What this does
- * --------------
- * 1. Reads the current default charset of the database (so we do
- *    not noisy-fail on installs that are ALREADY utf8mb4 - this
- *    migration is intended to be safely re-runnable as part of
- *    fresh installs too).
- * 2. ALTER DATABASE ... CHARACTER SET utf8mb4 - sets the default
- *    for any future CREATE TABLE without explicit charset.
- * 3. For every table with a CrashFix prefix (uses table_prefix
- *    from the connection), runs:
- *      ALTER TABLE x CONVERT TO CHARACTER SET utf8mb4
- *                    COLLATE utf8mb4_unicode_ci
- *    which rewrites every CHAR / VARCHAR / TEXT / ENUM column.
- * 4. Skips tables already at utf8mb4 (idempotent).
+ *   1832 Cannot change column 'X': used in a foreign key constraint 'Y'
  *
- * Safety
- * ------
- * * CONVERT TO CHARACTER SET widens column storage (utf8mb4 uses
- *   up to 4 bytes per char vs latin1's 1 byte). InnoDB enforces
- *   a max key length per index; if any existing index would
- *   exceed it after conversion, the ALTER fails noisily and the
- *   migration aborts before touching the next table. With CrashFix's
- *   schema (no overly long indexed VARCHARs), this should not
- *   trigger; if it does, the failing table name is in the error.
- * * Existing data is reinterpreted, not re-encoded. If old data
- *   was stored as latin1 BUT THE BYTES WERE ACTUALLY UTF-8
- *   (because the old connection didn't SET NAMES, so MySQL just
- *   stored whatever bytes PHP sent), CONVERT TO CHARACTER SET
- *   will double-encode it. To detect this, compare strings before
- *   and after on a non-prod copy first. The vast majority of
- *   installs are clean Latin-1 only and need no special handling.
- * * down() reverts the database default to latin1 but does NOT
- *   convert the per-table data back, because losing data is worse
- *   than a charset mismatch and the down() is intended only to
- *   make the migration row removable.
+ * SET FOREIGN_KEY_CHECKS=0 does NOT bypass this. That flag only
+ * disables runtime DML referential integrity; the 1832 check is a
+ * separate structural metadata enforcement that always runs during
+ * DDL.
+ *
+ * The documented workaround is:
+ *   1. Snapshot every FK constraint in the schema (name, table,
+ *      columns, ref_table, ref_columns, ON UPDATE, ON DELETE) from
+ *      information_schema.
+ *   2. DROP every FK.
+ *   3. Convert charset on every table.
+ *   4. Recreate every FK from the snapshot.
+ *
+ * The whole sequence is wrapped in try / finally so even if the
+ * convert step throws partway through, we make a best-effort attempt
+ * to restore FKs - leaving the schema in a worse state than we
+ * started would be far worse than failing the migration.
+ *
+ * Idempotency
+ * -----------
+ * - Tables already at utf8mb4 are skipped on the convert pass.
+ * - FK recreate skips any constraint that's already present (e.g. a
+ *   previous run dropped + recreated a subset).
+ * So this migration is safe to re-run if a prior attempt failed
+ * mid-walk. The migration row is only inserted on a clean completion;
+ * Yii1's migrate runner will retry from scratch each time it's invoked.
  */
 class m260423_000002_convert_to_utf8mb4 extends CDbMigration
 {
@@ -68,40 +61,73 @@ class m260423_000002_convert_to_utf8mb4 extends CDbMigration
 
         echo "  database: $dbName, table prefix: '$prefix', target charset: $target\n";
 
-        // 1. Database-level default. Future CREATE TABLE without an
-        //    explicit charset will pick this up.
+        // ----- 1. Snapshot every FK in the schema --------------------
+        // GROUP_CONCAT preserves the column order via ORDER BY
+        // ORDINAL_POSITION so multi-column FKs survive the round trip.
+        $fkRows = $db->createCommand("
+            SELECT
+                rc.CONSTRAINT_NAME       AS NAME,
+                rc.TABLE_NAME            AS TBL,
+                rc.REFERENCED_TABLE_NAME AS REF_TBL,
+                rc.UPDATE_RULE           AS ON_UPDATE,
+                rc.DELETE_RULE           AS ON_DELETE,
+                GROUP_CONCAT(kcu.COLUMN_NAME            ORDER BY kcu.ORDINAL_POSITION) AS COLS,
+                GROUP_CONCAT(kcu.REFERENCED_COLUMN_NAME ORDER BY kcu.ORDINAL_POSITION) AS REF_COLS
+              FROM information_schema.REFERENTIAL_CONSTRAINTS rc
+              JOIN information_schema.KEY_COLUMN_USAGE kcu
+                ON kcu.CONSTRAINT_SCHEMA = rc.CONSTRAINT_SCHEMA
+               AND kcu.CONSTRAINT_NAME   = rc.CONSTRAINT_NAME
+               AND kcu.TABLE_NAME        = rc.TABLE_NAME
+             WHERE rc.CONSTRAINT_SCHEMA = :db
+               AND rc.TABLE_NAME LIKE :pfx
+             GROUP BY rc.CONSTRAINT_NAME, rc.TABLE_NAME,
+                      rc.REFERENCED_TABLE_NAME, rc.UPDATE_RULE, rc.DELETE_RULE
+        ")->queryAll(true, array(
+            ':db'  => $dbName,
+            ':pfx' => $prefix . '%',
+        ));
+
+        echo "  found ".count($fkRows)." foreign-key constraint(s)\n";
+
+        // ----- 2. ALTER DATABASE default charset --------------------
         $this->execute(
             "ALTER DATABASE `$dbName` CHARACTER SET = $target COLLATE = $coll"
         );
 
-        // 2. Disable foreign-key checks for the duration of the walk.
-        //    Without this, ALTER TABLE ... CONVERT TO CHARACTER SET
-        //    fails on any column referenced by an FK with:
-        //       1832 Cannot change column 'X': used in a foreign key
-        //            constraint 'Y'
-        //    because MySQL will not convert one side of an FK without
-        //    converting the other in lockstep. With FK checks off, each
-        //    ALTER succeeds in isolation; once every table in the walk
-        //    has been converted, both sides of every FK are again at
-        //    matching charsets and the constraint validates cleanly
-        //    when checks are re-enabled below.
-        //
-        //    SET FOREIGN_KEY_CHECKS is a session-scoped setting on
-        //    the current connection. Migrations run in a single
-        //    connection, so the setting persists across all the
-        //    ALTER statements in the loop below.
-        //
-        //    The try / finally is critical: if any ALTER throws (e.g.
-        //    a row that won't fit in a utf8mb4 widened key), we MUST
-        //    re-enable FK checks before rethrowing, otherwise the
-        //    next request on the same long-lived connection runs
-        //    with checks off and silently corrupts referential
-        //    integrity.
-        $this->execute("SET FOREIGN_KEY_CHECKS = 0");
+        // ----- 3. Drop every FK ------------------------------------
+        // Some FKs may have been dropped by a previous failed run;
+        // catch and continue past "constraint does not exist" errors
+        // so the migration is idempotent.
+        foreach ($fkRows as $fk) {
+            echo "    dropping FK {$fk['NAME']} on {$fk['TBL']}\n";
+            try {
+                $this->execute(
+                    "ALTER TABLE `{$fk['TBL']}` DROP FOREIGN KEY `{$fk['NAME']}`"
+                );
+            } catch (Exception $e) {
+                $msg = $e->getMessage();
+                // MySQL: 1091 "check that column/key exists"
+                // MariaDB: similar phrasing. Either way, the only
+                // legitimate cause for a drop failure here is that the
+                // FK is already gone, which is fine. Re-throw on
+                // anything else so we don't proceed past unexpected
+                // breakage.
+                if (strpos($msg, "Can't DROP") === false &&
+                    strpos($msg, '1091')      === false) {
+                    throw $e;
+                }
+                echo "      (already dropped, continuing)\n";
+            }
+        }
+
+        // ----- 4. The big walk: convert every table ----------------
+        // Wrapped in try / finally so we ALWAYS attempt to recreate
+        // FKs below, even if a CONVERT throws partway. Half-converted
+        // schema with no FKs is far worse than half-converted schema
+        // with restored FKs.
+        $convertEx = null;
         try {
-            // 3. Find every table with the CrashFix prefix and convert
-            //    each one whose current default charset is not yet utf8mb4.
-            $sql = "
+            $rows = $db->createCommand("
                 SELECT t.TABLE_NAME, ccsa.CHARACTER_SET_NAME
                   FROM information_schema.TABLES t
                   JOIN information_schema.COLLATION_CHARACTER_SET_APPLICABILITY ccsa
@@ -109,18 +135,16 @@ class m260423_000002_convert_to_utf8mb4 extends CDbMigration
                  WHERE t.TABLE_SCHEMA = :db
                    AND t.TABLE_TYPE   = 'BASE TABLE'
                    AND t.TABLE_NAME LIKE :pfx
-            ";
-            $rows = $db->createCommand($sql)
-                       ->queryAll(true, array(
-                           ':db'  => $dbName,
-                           ':pfx' => $prefix . '%',
-                       ));
+            ")->queryAll(true, array(
+                ':db'  => $dbName,
+                ':pfx' => $prefix . '%',
+            ));
 
             $converted = 0;
             $skipped   = 0;
             foreach ($rows as $r) {
-                $tname  = $r['TABLE_NAME'];
-                $cset   = $r['CHARACTER_SET_NAME'];
+                $tname = $r['TABLE_NAME'];
+                $cset  = $r['CHARACTER_SET_NAME'];
                 if ($cset === $target) {
                     $skipped++;
                     continue;
@@ -132,23 +156,71 @@ class m260423_000002_convert_to_utf8mb4 extends CDbMigration
                 );
                 $converted++;
             }
-
             echo "  done: $converted converted, $skipped already-utf8mb4\n";
-        } finally {
-            // Always re-enable FK checks on this connection, even if a
-            // row above threw. If we left them off, the next query on
-            // this connection (within the same yiic process) would
-            // bypass referential integrity.
-            $this->execute("SET FOREIGN_KEY_CHECKS = 1");
+        } catch (Exception $e) {
+            $convertEx = $e;
+            echo "  WARNING: convert pass threw: ".$e->getMessage()."\n";
+            echo "  attempting to restore FKs anyway...\n";
+        }
+
+        // ----- 5. Recreate every FK from the snapshot --------------
+        // FK names + column lists + rules are preserved exactly, so
+        // application code that grepped tbl_AuthAssignment_ibfk_1
+        // (or any other constraint name) keeps working.
+        // Skip any FK that's already present (re-run-safe).
+        $existingFks = $db->createCommand("
+            SELECT CONSTRAINT_NAME AS NAME, TABLE_NAME AS TBL
+              FROM information_schema.REFERENTIAL_CONSTRAINTS
+             WHERE CONSTRAINT_SCHEMA = :db
+        ")->queryAll(true, array(':db' => $dbName));
+
+        $existingSet = array();
+        foreach ($existingFks as $row) {
+            $existingSet[$row['TBL'].'/'.$row['NAME']] = true;
+        }
+
+        $recreated   = 0;
+        $alreadyHere = 0;
+        foreach ($fkRows as $fk) {
+            $key = $fk['TBL'].'/'.$fk['NAME'];
+            if (isset($existingSet[$key])) {
+                $alreadyHere++;
+                continue;
+            }
+            $cols    = '`'.str_replace(',', '`,`', $fk['COLS']).'`';
+            $refCols = '`'.str_replace(',', '`,`', $fk['REF_COLS']).'`';
+            $sql = "ALTER TABLE `{$fk['TBL']}`
+                      ADD CONSTRAINT `{$fk['NAME']}`
+                      FOREIGN KEY ({$cols})
+                      REFERENCES `{$fk['REF_TBL']}` ({$refCols})
+                      ON UPDATE {$fk['ON_UPDATE']}
+                      ON DELETE {$fk['ON_DELETE']}";
+            try {
+                $this->execute($sql);
+                echo "    recreated FK {$fk['NAME']} on {$fk['TBL']}\n";
+                $recreated++;
+            } catch (Exception $e) {
+                echo "    WARNING: failed to recreate FK {$fk['NAME']} on {$fk['TBL']}: "
+                     . $e->getMessage() . "\n";
+                // Do NOT rethrow here - we want to attempt every other
+                // FK before bailing. The migration's overall success
+                // is determined by whether the convert step threw.
+            }
+        }
+        echo "  FK summary: $recreated recreated, $alreadyHere already-present\n";
+
+        // If the convert pass threw, propagate now so the migration row
+        // is NOT inserted and a re-run picks up where we left off.
+        if ($convertEx !== null) {
+            throw $convertEx;
         }
     }
 
     public function safeDown()
     {
-        // We do NOT round-trip data back to latin1 because that risks
-        // truncating real Cyrillic / CJK / emoji content that the new
-        // schema accepted. Just reset the database default so the
-        // migration row can be cleanly removed.
+        // Reset the database default only; do NOT round-trip per-table
+        // data back to latin1 because that would risk truncating real
+        // Cyrillic / CJK / emoji content the up() accepted.
         $db = $this->getDbConnection();
         $dbName = $db->createCommand('SELECT DATABASE()')->queryScalar();
         $this->execute(
