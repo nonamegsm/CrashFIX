@@ -45,7 +45,8 @@ class SiteController extends Controller
             'access' => [
                 'class' => AccessControl::class,
                 'only' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
-                           'admin', 'daemon', 'daemon-status', 'failed', 'failed-retry', 'failed-delete'],
+                           'admin', 'daemon', 'daemon-status', 'daemon-runtime-stats',
+                           'failed', 'failed-retry', 'failed-delete'],
                 'rules' => [
                     [
                         'actions' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
@@ -54,7 +55,7 @@ class SiteController extends Controller
                         'roles' => ['@'],
                     ],
                     [
-                        'actions' => ['admin', 'daemon', 'daemon-status'],
+                        'actions' => ['admin', 'daemon', 'daemon-status', 'daemon-runtime-stats'],
                         'allow' => true,
                         'roles' => ['gperm_access_admin_panel'],
                     ],
@@ -240,7 +241,15 @@ class SiteController extends Controller
 
     public function actionDaemon()
     {
-        return $this->render('daemon');
+        $this->sidebarActiveItem = 'Administer';
+        $this->adminMenuItem     = 'Daemon';
+
+        $dataProvider = new ActiveDataProvider([
+            'query' => \app\models\Operation::find()->orderBy(['timestamp' => SORT_DESC]),
+            'pagination' => ['pageSize' => 30],
+            'sort'       => false,
+        ]);
+        return $this->render('daemon', ['dataProvider' => $dataProvider]);
     }
 
     public function actionDaemonStatus()
@@ -251,6 +260,185 @@ class SiteController extends Controller
             $list = preg_split('#;#', $daemonResponse);
             return $this->renderAjax('_daemonStatus', ['daemonRetCode' => $daemonRetCode, 'list' => $list]);
         }
+    }
+
+    /**
+     * AJAX-only JSON endpoint that powers the Live Runtime Statistics
+     * panel on /site/daemon. Mirrors the Yii1 SiteController::
+     * actionDaemonRuntimeStats from CrashFIX php8-compat. Built
+     * entirely from tbl_operation + tbl_crashreport so it doesn't
+     * need a daemon TCP roundtrip - cheap to poll every few seconds.
+     */
+    public function actionDaemonRuntimeStats()
+    {
+        if (!Yii::$app->request->isAjax) {
+            return '';
+        }
+        Yii::$app->response->format = \yii\web\Response::FORMAT_JSON;
+        Yii::$app->response->headers->set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+        $db  = Yii::$app->db;
+        $now = time();
+
+        // Throughput windows (operations dispatched in last 5 / 15 / 60 min)
+        $throughput = $db->createCommand(
+            "SELECT
+                SUM(CASE WHEN timestamp >= :t300  THEN 1 ELSE 0 END) AS last_5m,
+                SUM(CASE WHEN timestamp >= :t900  THEN 1 ELSE 0 END) AS last_15m,
+                SUM(CASE WHEN timestamp >= :t3600 THEN 1 ELSE 0 END) AS last_60m
+             FROM {{%operation}}",
+            [
+                ':t300'  => $now - 300,
+                ':t900'  => $now - 900,
+                ':t3600' => $now - 3600,
+            ]
+        )->queryOne();
+
+        // Status mix in the last hour
+        $statusRows = $db->createCommand(
+            "SELECT status, COUNT(*) AS n
+             FROM {{%operation}}
+             WHERE timestamp >= :since
+             GROUP BY status",
+            [':since' => $now - 3600]
+        )->queryAll();
+
+        // Operation status codes (from tbl_lookup OperationStatus seed):
+        // 1=Started, 2=Succeeded, 3=Failed
+        $statusMix = ['started' => 0, 'succeeded' => 0, 'failed' => 0];
+        foreach ($statusRows as $r) {
+            switch ((int) $r['status']) {
+                case 1: $statusMix['started']   = (int) $r['n']; break;
+                case 2: $statusMix['succeeded'] = (int) $r['n']; break;
+                case 3: $statusMix['failed']    = (int) $r['n']; break;
+            }
+        }
+        $totalLastHour = $statusMix['started'] + $statusMix['succeeded'] + $statusMix['failed'];
+        $succRate = ($statusMix['succeeded'] + $statusMix['failed']) > 0
+            ? round(100.0 * $statusMix['succeeded'] / ($statusMix['succeeded'] + $statusMix['failed']), 1)
+            : null;
+
+        // Optype breakdown (1=ImportPdb, 2=ProcessCrashReport, 3=DeleteDebugInfo)
+        $typeRows = $db->createCommand(
+            "SELECT optype, status, COUNT(*) AS n
+             FROM {{%operation}}
+             WHERE timestamp >= :since
+             GROUP BY optype, status",
+            [':since' => $now - 3600]
+        )->queryAll();
+
+        $typeNames = [
+            1 => 'Import PDB',
+            2 => 'Process crash report',
+            3 => 'Delete debug info',
+        ];
+        $byType = [];
+        foreach ($typeNames as $tname) {
+            $byType[$tname] = ['ok' => 0, 'failed' => 0, 'started' => 0, 'total' => 0];
+        }
+        foreach ($typeRows as $r) {
+            $tid = (int) $r['optype'];
+            if (!isset($typeNames[$tid])) continue;
+            $tname = $typeNames[$tid];
+            $n = (int) $r['n'];
+            $byType[$tname]['total'] += $n;
+            switch ((int) $r['status']) {
+                case 1: $byType[$tname]['started'] += $n; break;
+                case 2: $byType[$tname]['ok']      += $n; break;
+                case 3: $byType[$tname]['failed']  += $n; break;
+            }
+        }
+
+        // Currently in-flight operations
+        $runningRows = $db->createCommand(
+            "SELECT id, cmdid, optype, timestamp, operand1
+             FROM {{%operation}}
+             WHERE status = 1
+             ORDER BY timestamp ASC
+             LIMIT 50"
+        )->queryAll();
+
+        $running = [];
+        foreach ($runningRows as $r) {
+            $path = (string) $r['operand1'];
+            $file = basename($path) ?: $path;
+            $tid  = (int) $r['optype'];
+            $running[] = [
+                'id'        => (int) $r['id'],
+                'cmdid'     => (string) $r['cmdid'],
+                'optype'    => $typeNames[$tid] ?? ('opcode ' . $tid),
+                'started'   => (int) $r['timestamp'],
+                'elapsed_s' => max(0, $now - (int) $r['timestamp']),
+                'file'      => $file,
+            ];
+        }
+
+        // Recent failures (last 10)
+        $recentFailRows = $db->createCommand(
+            "SELECT id, cmdid, optype, timestamp, operand1
+             FROM {{%operation}}
+             WHERE status = 3
+             ORDER BY id DESC
+             LIMIT 10"
+        )->queryAll();
+
+        $recentFailures = [];
+        foreach ($recentFailRows as $r) {
+            $path = (string) $r['operand1'];
+            $file = basename($path) ?: $path;
+            $tid  = (int) $r['optype'];
+            $recentFailures[] = [
+                'id'      => (int) $r['id'],
+                'optype'  => $typeNames[$tid] ?? ('opcode ' . $tid),
+                'when'    => date('Y-m-d H:i:s', (int) $r['timestamp']),
+                'ago_s'   => max(0, $now - (int) $r['timestamp']),
+                'file'    => $file,
+            ];
+        }
+
+        // Lifetime crash-report processing progress.
+        // Crashreport status codes: 1=Waiting, 2=Processing, 3=Processed, 4=Invalid
+        $crashCounts = $db->createCommand(
+            "SELECT
+                COUNT(*) AS total,
+                SUM(CASE WHEN status = 3 THEN 1 ELSE 0 END) AS processed,
+                SUM(CASE WHEN status IN (3, 4) THEN 1 ELSE 0 END) AS done
+             FROM {{%crashreport}}"
+        )->queryOne();
+        $crashTotal     = (int) ($crashCounts['total']     ?? 0);
+        $crashProcessed = (int) ($crashCounts['processed'] ?? 0);
+        $crashDone      = (int) ($crashCounts['done']      ?? 0);
+        $processedPct   = $crashTotal > 0 ? round(100.0 * $crashProcessed / $crashTotal, 1) : null;
+        $donePct        = $crashTotal > 0 ? round(100.0 * $crashDone      / $crashTotal, 1) : null;
+
+        return [
+            'now'        => $now,
+            'throughput' => [
+                'per_5m'       => (int) $throughput['last_5m'],
+                'per_15m'      => (int) $throughput['last_15m'],
+                'per_60m'      => (int) $throughput['last_60m'],
+                'rate_per_min' => round((int) $throughput['last_60m'] / 60.0, 2),
+            ],
+            'last_hour' => [
+                'total'       => $totalLastHour,
+                'succeeded'   => $statusMix['succeeded'],
+                'failed'      => $statusMix['failed'],
+                'in_flight'   => $statusMix['started'],
+                'success_pct' => $succRate,
+            ],
+            'crash_lifetime' => [
+                'total'         => $crashTotal,
+                'processed'     => $crashProcessed,
+                'done'          => $crashDone,
+                'processed_pct' => $processedPct,
+                'done_pct'      => $donePct,
+                'pending'       => max(0, $crashTotal - $crashDone),
+            ],
+            'by_type'         => $byType,
+            'running'         => $running,
+            'running_count'   => count($running),
+            'recent_failures' => $recentFailures,
+        ];
     }
 
     public function actionCheckDaemon()
