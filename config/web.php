@@ -5,16 +5,25 @@ $db = require __DIR__ . '/db.php';
 
 $isInstalled = is_file(__DIR__ . '/user_params.ini') && is_file(__DIR__ . '/installed.txt');
 
+$storageComponent = require __DIR__ . '/storage.php';
+$legacyDataAlias = $storageComponent['__legacyAlias'] ?? null;
+unset($storageComponent['__legacyAlias']);
+
+$aliases = [
+    '@bower' => '@vendor/bower-asset',
+    '@npm'   => '@vendor/npm-asset',
+];
+if ($legacyDataAlias !== null) {
+    $aliases['@crashfixLegacyData'] = $legacyDataAlias;
+}
+
 $config = [
     'id' => 'CrashFix',
     'name' => 'CrashFix',
     'layout' => 'adminlte/main',
     'basePath' => dirname(__DIR__),
     'bootstrap' => ['log'],
-    'aliases' => [
-        '@bower' => '@vendor/bower-asset',
-        '@npm'   => '@vendor/npm-asset',
-    ],
+    'aliases' => $aliases,
     'components' => [
         'request' => [
             // !!! insert a secret key in the following (if it is empty) - this is required by cookie validation
@@ -59,10 +68,7 @@ $config = [
             'host' => '127.0.0.1',
             'servicePort' => '50',
         ],
-        'storage' => [
-            'class' => 'app\components\Storage',
-            'basePath' => '@app/data',
-        ],
+        'storage' => $storageComponent,
         'stats' => [
             'class' => 'app\components\Stats',
         ],

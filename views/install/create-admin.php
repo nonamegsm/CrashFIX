@@ -1,10 +1,13 @@
 <?php
 /** @var yii\web\View $this */
 /** @var app\models\User $model */
+/** @var bool $allowSkip */
+
 use yii\helpers\Html;
 use yii\bootstrap4\ActiveForm;
 
 $this->title = 'Create Admin Account - CrashFix Setup';
+$allowSkip = $allowSkip ?? false;
 ?>
 
 <div class="install-admin my-5">
@@ -13,7 +16,17 @@ $this->title = 'Create Admin Account - CrashFix Setup';
             <h4 class="mb-0">Initial Admin User</h4>
         </div>
         <div class="card-body p-4">
-            <p class="text-muted small mb-4">Create the first administrator account for your CrashFix installation.</p>
+            <p class="text-muted small mb-4">
+                Create the first administrator account — or skip if you are reusing Yii1 users.
+            </p>
+            <?php if ($allowSkip): ?>
+                <p class="small mb-3">
+                    <?= Html::a('Skip — use existing Yii1 accounts', ['skip-admin'], [
+                        'class' => 'text-secondary',
+                        'data-confirm' => 'Skip creating a new user? You will log in with an account that already exists in the database.',
+                    ]) ?>
+                </p>
+            <?php endif; ?>
 
             <?php if ($model->hasErrors()): ?>
                 <div class="alert alert-danger">

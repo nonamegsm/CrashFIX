@@ -3,16 +3,25 @@
 $params = require __DIR__ . '/params.php';
 $db = require __DIR__ . '/db.php';
 
+$storageComponent = require __DIR__ . '/storage.php';
+$legacyDataAlias = $storageComponent['__legacyAlias'] ?? null;
+unset($storageComponent['__legacyAlias']);
+
+$aliases = [
+    '@bower' => '@vendor/bower-asset',
+    '@npm'   => '@vendor/npm-asset',
+    '@tests' => '@app/tests',
+];
+if ($legacyDataAlias !== null) {
+    $aliases['@crashfixLegacyData'] = $legacyDataAlias;
+}
+
 $config = [
     'id' => 'basic-console',
     'basePath' => dirname(__DIR__),
     'bootstrap' => ['log'],
     'controllerNamespace' => 'app\commands',
-    'aliases' => [
-        '@bower' => '@vendor/bower-asset',
-        '@npm'   => '@vendor/npm-asset',
-        '@tests' => '@app/tests',
-    ],
+    'aliases' => $aliases,
     'components' => [
         'cache' => [
             'class' => 'yii\caching\FileCache',
@@ -31,10 +40,7 @@ $config = [
             'host' => '127.0.0.1',
             'servicePort' => '50',
         ],
-        'storage' => [
-            'class' => 'app\components\Storage',
-            'basePath' => '@app/data',
-        ],
+        'storage' => $storageComponent,
         'mailer' => [
             'class' => \yii\symfonymailer\Mailer::class,
             'viewPath' => '@app/mail',

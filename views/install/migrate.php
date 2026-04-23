@@ -1,5 +1,7 @@
 <?php
 /** @var yii\web\View $this */
+/** @var bool $existingYii1 */
+
 use yii\helpers\Html;
 use yii\helpers\Url;
 
@@ -7,15 +9,28 @@ $this->title = 'Database Migrations - CrashFix Setup';
 
 $runUrl = Url::to(['install/run-migrations']);
 $redirectUrl = Url::to(['install/create-admin']);
+$legacyAdopt = $existingYii1 ? '1' : '0';
 ?>
 
 <div class="install-migrate my-5">
-    <div class="card shadow-sm mx-auto" style="max-width: 600px;">
+    <div class="card shadow-sm mx-auto" style="max-width: 640px;">
         <div class="card-header bg-white">
-            <h4 class="mb-0">Setup Database Schema</h4>
+            <h4 class="mb-0">Database schema</h4>
         </div>
         <div class="card-body p-4">
-            <p class="text-muted mb-4">Click <strong>Initialize Database</strong> to create all required tables and seed initial data. This may take a few seconds.</p>
+            <?php if ($existingYii1): ?>
+                <div class="alert alert-warning small">
+                    <strong>Existing Yii1 database.</strong>
+                    Migrations run in <em>adopt</em> mode: if a table, column, or seed row
+                    already exists (typical when upgrading in place), that step is recorded as
+                    done instead of failing. Take a backup first if you are unsure.
+                </div>
+            <?php else: ?>
+                <p class="text-muted mb-4">
+                    Click <strong>Run migrations</strong> to create tables and seed lookup data.
+                    This may take a few seconds.
+                </p>
+            <?php endif; ?>
 
             <div id="migration-status" class="alert alert-info py-3 mb-4 d-none">
                 <div class="spinner-border spinner-border-sm me-2" role="status"></div>
@@ -26,7 +41,7 @@ $redirectUrl = Url::to(['install/create-admin']);
 
             <div class="d-flex justify-content-between mt-3">
                 <?= Html::a('Back', ['db-config'], ['class' => 'btn btn-outline-secondary', 'id' => 'btn-back']) ?>
-                <button id="btn-run-migrate" class="btn btn-primary px-4">Initialize Database</button>
+                <button type="button" id="btn-run-migrate" class="btn btn-primary px-4">Run migrations</button>
             </div>
         </div>
     </div>
@@ -43,7 +58,7 @@ $this->registerJs(<<<JS
         $.ajax({
             url: "$runUrl",
             type: "POST",
-            data: { _csrf: yii.getCsrfToken() },
+            data: { _csrf: yii.getCsrfToken(), legacy_adopt: "$legacyAdopt" },
             dataType: "json",
             success: function(resp) {
                 if (resp.success) {
@@ -65,4 +80,3 @@ $this->registerJs(<<<JS
     });
 JS
 );
-?>

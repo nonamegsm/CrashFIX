@@ -1,5 +1,6 @@
 <?php
 /** @var yii\web\View $this */
+
 use yii\helpers\Html;
 
 $this->title = 'Setup Complete - CrashFix Setup';
@@ -14,6 +15,9 @@ $this->title = 'Setup Complete - CrashFix Setup';
                 </svg>
             </div>
             <h2 class="card-title mb-4">Setup Complete!</h2>
+            <?php if ($msg = Yii::$app->session->getFlash('installer_notice')): ?>
+                <p class="alert alert-info text-start small"><?= Html::encode($msg) ?></p>
+            <?php endif; ?>
             <p class="card-text lead text-muted">CrashFix has been successfully installed and configured.</p>
             <div class="mt-5">
                 <?= Html::a('Go to Login', ['site/login'], ['class' => 'btn btn-primary btn-lg px-5']) ?>
