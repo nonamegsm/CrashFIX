@@ -46,12 +46,10 @@ $returnTo  = $req->requestUri;
 .cf-active-filter  { display: inline-block; margin-left: 8px; padding: 2px 8px;
                      background: #fff3cd; color: #856404; border-radius: 4px;
                      font-size: 11px; }
-.cf-bulk-bar       { padding: 6px 8px; margin: 4px 0 8px 0; background: #f8f9fa;
-                     border: 1px solid #e1e1e1; border-radius: 4px; font-size: 12px; }
-.cf-bulk-bar .cf-bulk-count { color: #666; min-width: 110px; display: inline-block; }
-.cf-bulk-bar button { padding: 3px 10px; font-size: 12px; margin-right: 4px; }
-.cf-bulk-bar button[disabled] { opacity: 0.5; cursor: not-allowed; }
-.cf-bulk-bar .cf-bulk-spacer { display: inline-block; width: 24px; }
+/* Selection counter shown to the LEFT of the Other Actions dropdown,
+   matching the existing CrashReport _reportList.php toolbar layout. */
+.cf-bulk-count     { display: inline-block; min-width: 110px;
+                     margin-right: 12px; color: #666; font-size: 12px; }
 .flash-success     { padding: 8px 12px; background: #dff0d8; color: #2c662d;
                      border: 1px solid #b6dfb1; border-radius: 4px; margin-bottom: 10px; }
 .flash-error       { padding: 8px 12px; background: #f2dede; color: #952422;
@@ -125,34 +123,40 @@ $returnTo  = $req->requestUri;
                 <?php echo CHtml::hiddenField('return', $returnTo); ?>
                 <?php echo CHtml::hiddenField('all',    '0', array('data-bulk-all'=>'1')); ?>
 
-                <div class="cf-bulk-bar">
-                    <span class="cf-bulk-count" data-counter="cf-grid-crash">0 selected</span>
-                    <button type="submit"
-                            class="cf-bulk-btn-selected"
-                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
-                            data-confirm-prefix="Re-queue"
-                            data-kind-label="crash report" disabled>Retry selected</button>
-                    <button type="submit"
-                            class="cf-bulk-btn-selected"
-                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
-                            data-confirm-prefix="PERMANENTLY DELETE"
-                            data-kind-label="crash report" disabled>Delete selected</button>
-                    <span class="cf-bulk-spacer"></span>
-                    <button type="submit"
-                            class="cf-bulk-btn-all"
-                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
-                            data-confirm-msg="Re-queue ALL <?php echo (int)$crashTotal; ?> matching crash reports?
-They'll be picked up by the daemon on the next poll cycle.">
-                        Retry ALL <?php echo (int)$crashTotal; ?> matching
-                    </button>
-                    <button type="submit"
-                            class="cf-bulk-btn-all"
-                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
-                            data-confirm-msg="PERMANENTLY DELETE all <?php echo (int)$crashTotal; ?> matching crash reports?
-This cannot be undone. The on-disk .zip files will also be removed.
-(Capped at 500 per click; click again if more remain.)">
-                        Delete ALL <?php echo (int)$crashTotal; ?> matching
-                    </button>
+                <!-- Actions Toolbar: matches the CrashReport _reportList.php
+                     layout (.div_actions + .dropdown-menu). 'Other Actions...'
+                     contains exactly the three operations the page supports. -->
+                <div class="span-27 last">
+                    <div class="div_actions">
+                        <span class="cf-bulk-count" data-counter="cf-grid-crash">0 selected</span>
+
+                        <ul class="dropdown-menu">
+                            <li><a href="#">Other Actions...</a>
+                                <ul>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-crash"
+                                           data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                                           data-mode="selected"
+                                           data-confirm-prefix="PERMANENTLY DELETE"
+                                           data-kind-label="crash report">Delete Selected Reports</a></li>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-crash"
+                                           data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                                           data-mode="selected"
+                                           data-confirm-prefix="Reprocess"
+                                           data-kind-label="crash report">Reprocess Selected Reports</a></li>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-crash"
+                                           data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                                           data-mode="all"
+                                           data-confirm-msg="Reprocess ALL <?php echo (int)$crashTotal; ?> matching crash reports? They'll be picked up by the daemon on the next poll cycle.">Reprocess All Reports<?php echo $crashQ !== '' ? ' (filtered)' : ''; ?></a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
 
                 <?php $this->widget('zii.widgets.grid.CGridView', array(
@@ -283,34 +287,37 @@ This cannot be undone. The on-disk .zip files will also be removed.
                 <?php echo CHtml::hiddenField('return', $returnTo); ?>
                 <?php echo CHtml::hiddenField('all',    '0', array('data-bulk-all'=>'1')); ?>
 
-                <div class="cf-bulk-bar">
-                    <span class="cf-bulk-count" data-counter="cf-grid-debug">0 selected</span>
-                    <button type="submit"
-                            class="cf-bulk-btn-selected"
-                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
-                            data-confirm-prefix="Re-queue"
-                            data-kind-label="debug-info file" disabled>Retry selected</button>
-                    <button type="submit"
-                            class="cf-bulk-btn-selected"
-                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
-                            data-confirm-prefix="PERMANENTLY DELETE"
-                            data-kind-label="debug-info file" disabled>Delete selected</button>
-                    <span class="cf-bulk-spacer"></span>
-                    <button type="submit"
-                            class="cf-bulk-btn-all"
-                            data-action="<?php echo CHtml::encode($retryUrl); ?>"
-                            data-confirm-msg="Re-queue ALL <?php echo (int)$debugTotal; ?> matching debug-info files?
-They'll be picked up by the daemon on the next poll cycle.">
-                        Retry ALL <?php echo (int)$debugTotal; ?> matching
-                    </button>
-                    <button type="submit"
-                            class="cf-bulk-btn-all"
-                            data-action="<?php echo CHtml::encode($deleteUrl); ?>"
-                            data-confirm-msg="PERMANENTLY DELETE all <?php echo (int)$debugTotal; ?> matching debug-info files?
-This cannot be undone. The on-disk symbol files will also be removed.
-(Capped at 500 per click; click again if more remain.)">
-                        Delete ALL <?php echo (int)$debugTotal; ?> matching
-                    </button>
+                <div class="span-27 last">
+                    <div class="div_actions">
+                        <span class="cf-bulk-count" data-counter="cf-grid-debug">0 selected</span>
+
+                        <ul class="dropdown-menu">
+                            <li><a href="#">Other Actions...</a>
+                                <ul>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-debug"
+                                           data-action="<?php echo CHtml::encode($deleteUrl); ?>"
+                                           data-mode="selected"
+                                           data-confirm-prefix="PERMANENTLY DELETE"
+                                           data-kind-label="debug-info file">Delete Selected Files</a></li>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-debug"
+                                           data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                                           data-mode="selected"
+                                           data-confirm-prefix="Reprocess"
+                                           data-kind-label="debug-info file">Reprocess Selected Files</a></li>
+                                    <li><a href="#"
+                                           class="cf-bulk-link"
+                                           data-form="cf-bulk-form-debug"
+                                           data-action="<?php echo CHtml::encode($retryUrl); ?>"
+                                           data-mode="all"
+                                           data-confirm-msg="Reprocess ALL <?php echo (int)$debugTotal; ?> matching debug-info files? They'll be picked up by the daemon on the next poll cycle.">Reprocess All Files<?php echo $debugQ !== '' ? ' (filtered)' : ''; ?></a></li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
 
                 <?php $this->widget('zii.widgets.grid.CGridView', array(
@@ -412,6 +419,9 @@ $script = <<<JS
     var CSRF_TOKEN = $csrfJsToken;
     var RETRY_URL  = $retryUrlJs;
 
+    // Selection counter (no enable/disable buttons - the dropdown
+    // items always render; we instead alert() when "Selected" is
+    // chosen with zero rows ticked).
     function updateCounter(form) {
         var gridId = form.getAttribute('data-grid-id');
         var counter = document.querySelector('[data-counter="' + gridId + '"]');
@@ -419,8 +429,6 @@ $script = <<<JS
         if (!grid || !counter) return;
         var n = grid.querySelectorAll('input.cf-row-checkbox:checked').length;
         counter.textContent = n + ' selected';
-        var btns = form.querySelectorAll('.cf-bulk-btn-selected');
-        for (var i = 0; i < btns.length; i++) btns[i].disabled = (n === 0);
     }
 
     var bulkForms = document.querySelectorAll('form[data-grid-id]');
@@ -437,45 +445,51 @@ $script = <<<JS
         updateCounter(form);
     }
 
+    // Other Actions dropdown items. Each <a class="cf-bulk-link">
+    // carries:
+    //   data-form              : form id to POST
+    //   data-action            : URL to POST to
+    //   data-mode              : "selected" | "all"
+    //   data-confirm-prefix    : verb for selected-mode confirm ("Reprocess", "PERMANENTLY DELETE")
+    //   data-kind-label        : "crash report" / "debug-info file"
+    //   data-confirm-msg       : full confirm() text for all-mode
     document.addEventListener('click', function (e) {
-        var btn = e.target.closest && e.target.closest('.cf-bulk-btn-selected, .cf-bulk-btn-all');
-        if (!btn) return;
-        var form = btn.closest('form[data-grid-id]');
-        if (!form) return;
+        var link = e.target.closest && e.target.closest('a.cf-bulk-link');
+        if (!link) return;
+        e.preventDefault();
 
-        var action = btn.getAttribute('data-action');
+        var form = document.getElementById(link.getAttribute('data-form'));
+        if (!form) return;
+        var grid = document.getElementById(form.getAttribute('data-grid-id'));
+        var mode = link.getAttribute('data-mode');
+
+        var action = link.getAttribute('data-action');
         if (action) form.setAttribute('action', action);
+        var hidAll = form.querySelector('[data-bulk-all]');
 
         var msg;
-        var isAll = btn.classList.contains('cf-bulk-btn-all');
-        if (isAll) {
-            msg = btn.getAttribute('data-confirm-msg') || 'Are you sure?';
-            var hidAll = form.querySelector('[data-bulk-all]');
+        if (mode === 'all') {
+            msg = link.getAttribute('data-confirm-msg') || 'Are you sure?';
             if (hidAll) hidAll.value = '1';
-            // Strip selected ids so controller takes the all=1 path.
-            var grid = document.getElementById(form.getAttribute('data-grid-id'));
+            // Strip selected ids so controller takes the all=1 path
+            // (otherwise the ids[] payload would override our intent).
             if (grid) {
                 var cb = grid.querySelectorAll('input.cf-row-checkbox:checked');
-                for (var i = 0; i < cb.length; i++) cb[i].checked = false;
+                for (var k = 0; k < cb.length; k++) cb[k].checked = false;
             }
         } else {
-            var grid = document.getElementById(form.getAttribute('data-grid-id'));
             var n = grid ? grid.querySelectorAll('input.cf-row-checkbox:checked').length : 0;
             if (n === 0) {
-                e.preventDefault();
                 alert('Select one or more rows first.');
                 return;
             }
-            var prefix = btn.getAttribute('data-confirm-prefix') || 'Process';
-            var label  = btn.getAttribute('data-kind-label')     || 'item';
+            var prefix = link.getAttribute('data-confirm-prefix') || 'Process';
+            var label  = link.getAttribute('data-kind-label')     || 'item';
             msg = prefix + ' ' + n + ' selected ' + label + (n === 1 ? '' : 's') + '?';
-            var hidAll = form.querySelector('[data-bulk-all]');
             if (hidAll) hidAll.value = '0';
         }
-        if (!confirm(msg)) {
-            e.preventDefault();
-            return;
-        }
+        if (!confirm(msg)) return;
+        form.submit();
     });
 
     document.addEventListener('click', function (e) {
