@@ -288,7 +288,18 @@ class SiteController extends Controller
         $crashQ = trim((string) $req->get('cr-q', ''));
         $debugQ = trim((string) $req->get('di-q', ''));
 
-        $peTbl = Processingerror::tableName();
+        $peTbl   = Processingerror::tableName();
+        // Cast the type constants to int and inline them directly into
+        // the correlated subquery string. They are NOT user input -
+        // they are class constants we own - so the cast is sufficient
+        // injection guard. We cannot use named bind params for these
+        // because Yii2's ActiveDataProvider::getTotalCount() builds a
+        // fresh SELECT COUNT(*) that drops the select clause but
+        // keeps the bound params, and PDO then errors with
+        // SQLSTATE[HY093] "number of bound variables does not match
+        // number of tokens".
+        $peTypeCr = (int) Processingerror::TYPE_CRASH_REPORT_ERROR;
+        $peTypeDi = (int) Processingerror::TYPE_DEBUG_INFO_ERROR;
 
         // ---- Failed crash reports -------------------------------------
         $crashProvider = null;
@@ -298,7 +309,7 @@ class SiteController extends Controller
                 ->select([
                     'cr.*',
                     'last_error' => "(SELECT pe.message FROM {$peTbl} pe
-                                       WHERE pe.type = :pe_type_cr
+                                       WHERE pe.type = {$peTypeCr}
                                          AND pe.srcid = cr.id
                                        ORDER BY pe.id DESC
                                        LIMIT 1)",
@@ -308,8 +319,7 @@ class SiteController extends Controller
                 // STATUS_* constants; using the raw integer with a
                 // comment matches the model's existing style (see
                 // beforeSave() which writes $this->status = 1).
-                ->where(['cr.project_id' => $projectId, 'cr.status' => 4])
-                ->params([':pe_type_cr' => Processingerror::TYPE_CRASH_REPORT_ERROR]);
+                ->where(['cr.project_id' => $projectId, 'cr.status' => 4]);
 
             // Free-text filter: matches filename / crashguid / any
             // historical processingerror.message via EXISTS subquery.
@@ -361,14 +371,13 @@ class SiteController extends Controller
                 ->select([
                     'di.*',
                     'last_error' => "(SELECT pe.message FROM {$peTbl} pe
-                                       WHERE pe.type = :pe_type_di
+                                       WHERE pe.type = {$peTypeDi}
                                          AND pe.srcid = di.id
                                        ORDER BY pe.id DESC
                                        LIMIT 1)",
                 ])
                 ->where(['di.project_id' => $projectId])
-                ->andWhere(['in', 'di.status', $debugStatuses])
-                ->params([':pe_type_di' => Processingerror::TYPE_DEBUG_INFO_ERROR]);
+                ->andWhere(['in', 'di.status', $debugStatuses]);
 
             if ($debugQ !== '') {
                 $debugQuery->andWhere([
