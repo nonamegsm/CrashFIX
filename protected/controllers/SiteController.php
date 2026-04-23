@@ -292,13 +292,21 @@ class SiteController extends Controller
 		}
 		else
 		{
-			// Retrieve license info
-			$licenseInfo = Yii::app()->daemon->getLicenseInfo();	
-				
+			// Retrieve license info + daemon config info in one call so
+			// the admin panel can surface the running daemon's version,
+			// pid and webroot alongside the license details.
+			$licenseInfo = Yii::app()->daemon->getLicenseInfo();
+			$configInfo  = Yii::app()->daemon->getConfigInfo();
+			$webAppVer   = isset(Yii::app()->params['version'])
+				? Yii::app()->params['version'] : '';
+
 			// Render partial view
-			$this->renderPartial('_licenseInfo', 
-				array('licenseInfo'=>$licenseInfo));					
-			
+			$this->renderPartial('_licenseInfo', array(
+				'licenseInfo' => $licenseInfo,
+				'configInfo'  => $configInfo,
+				'webAppVer'   => $webAppVer,
+			));
+
 			// Done
 			Yii::app()->end();
 		}
