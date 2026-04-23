@@ -6,6 +6,8 @@
 /** @var int $projectId */
 /** @var bool $canCrash */
 /** @var bool $canDebug */
+/** @var string $crashQ */
+/** @var string $debugQ */
 
 use yii\helpers\Html;
 use yii\helpers\Url;
@@ -27,6 +29,11 @@ $session = Yii::$app->session;
                      border: 1px dashed #ddd; border-radius: 4px; }
 .cf-failed-meta    { font-size: 11px; color: #666; }
 .cf-failed-section h3 { margin-top: 6px; }
+.cf-search-row     { margin-bottom: 8px; }
+.cf-search-row .cf-search-input { max-width: 380px; display: inline-block; }
+.cf-active-filter  { display: inline-block; margin-left: 8px; padding: 2px 8px;
+                     background: #fff3cd; color: #856404; border-radius: 4px;
+                     font-size: 11px; }
 </style>
 
 <h1>Failed Items</h1>
@@ -37,6 +44,8 @@ $session = Yii::$app->session;
     <strong>Retry</strong> to re-queue an item for the next daemon poll
     cycle (status flips back to Waiting; the existing error history is
     preserved so you can still see what went wrong).
+    Click any column header to sort. The search box matches
+    filename, GUID, and any historical error-message text.
 </p>
 
 <?php if ($session->hasFlash('failed-retry-success')): ?>
@@ -61,42 +70,76 @@ $session = Yii::$app->session;
     <div class="cf-failed-section">
         <h3>Failed crash reports
             <span class="badge badge-danger"><?= (int) $crashProvider->getTotalCount() ?></span>
+            <?php if ($crashQ !== ''): ?>
+                <span class="cf-active-filter">
+                    filter: <strong><?= Html::encode($crashQ) ?></strong>
+                </span>
+            <?php endif; ?>
         </h3>
+
+        <form method="get" action="" class="cf-search-row form-inline">
+            <input type="text"
+                   name="cr-q"
+                   value="<?= Html::encode($crashQ) ?>"
+                   placeholder="Search by filename, GUID, or error message…"
+                   class="form-control form-control-sm cf-search-input">
+            <button type="submit" class="btn btn-sm btn-primary">Search</button>
+            <?php if ($crashQ !== ''): ?>
+                <?= Html::a('Clear',
+                    Url::current(['cr-q' => null, 'cr-page' => null, 'cr-sort' => null]),
+                    ['class' => 'btn btn-sm btn-outline-secondary']) ?>
+            <?php endif; ?>
+            <?php // preserve other query params (di-q, di-page, di-sort) ?>
+            <?php foreach (['di-q', 'di-page', 'di-sort'] as $k):
+                $v = Yii::$app->request->get($k);
+                if ($v !== null && $v !== ''): ?>
+                <input type="hidden" name="<?= Html::encode($k) ?>" value="<?= Html::encode($v) ?>">
+            <?php endif; endforeach; ?>
+        </form>
+
         <?php if ((int) $crashProvider->getTotalCount() === 0): ?>
-            <div class="cf-failed-empty">No failed crash reports in this project. Healthy.</div>
+            <div class="cf-failed-empty">
+                <?= $crashQ === ''
+                    ? 'No failed crash reports in this project. Healthy.'
+                    : 'No failed crash reports match your search.' ?>
+            </div>
         <?php else: ?>
             <?= GridView::widget([
                 'dataProvider' => $crashProvider,
                 'layout'       => "{items}\n{pager}\n{summary}",
                 'columns' => [
                     [
-                        'header' => 'ID',
-                        'value'  => function ($d) {
+                        'attribute' => 'id',
+                        'label'     => 'ID',
+                        'value'     => function ($d) {
                             return Html::a('#' . (int) $d->id,
                                 ['/crash-report/view', 'id' => $d->id]);
                         },
-                        'format' => 'raw',
+                        'format'         => 'raw',
                         'contentOptions' => ['style' => 'white-space:nowrap; width:60px'],
                     ],
                     [
-                        'header' => 'File',
-                        'value'  => function ($d) {
+                        'attribute' => 'srcfilename',
+                        'label'     => 'File',
+                        'value'     => function ($d) {
                             $fname = $d->srcfilename ?: ('crashguid ' . substr((string) $d->crashguid, 0, 8));
                             return Html::encode($fname);
                         },
                         'format' => 'raw',
                     ],
                     [
-                        'header' => 'Received',
-                        'value'  => function ($d) {
+                        'attribute' => 'received',
+                        'label'     => 'Received',
+                        'value'     => function ($d) {
                             $ts = (int) ($d->received ?: $d->date_created);
                             return $ts > 0 ? date('Y-m-d H:i', $ts) : '-';
                         },
                         'contentOptions' => ['style' => 'white-space:nowrap; width:130px'],
                     ],
                     [
-                        'header' => 'Size',
-                        'value'  => function ($d) {
+                        'attribute' => 'filesize',
+                        'label'     => 'Size',
+                        'value'     => function ($d) {
                             return MiscHelpers::fileSizeToStr((int) $d->filesize);
                         },
                         'contentOptions' => ['style' => 'white-space:nowrap; width:80px;
@@ -147,26 +190,57 @@ $session = Yii::$app->session;
     <div class="cf-failed-section">
         <h3>Failed debug-info files
             <span class="badge badge-danger"><?= (int) $debugProvider->getTotalCount() ?></span>
+            <?php if ($debugQ !== ''): ?>
+                <span class="cf-active-filter">
+                    filter: <strong><?= Html::encode($debugQ) ?></strong>
+                </span>
+            <?php endif; ?>
         </h3>
+
+        <form method="get" action="" class="cf-search-row form-inline">
+            <input type="text"
+                   name="di-q"
+                   value="<?= Html::encode($debugQ) ?>"
+                   placeholder="Search by filename, GUID, or error message…"
+                   class="form-control form-control-sm cf-search-input">
+            <button type="submit" class="btn btn-sm btn-primary">Search</button>
+            <?php if ($debugQ !== ''): ?>
+                <?= Html::a('Clear',
+                    Url::current(['di-q' => null, 'di-page' => null, 'di-sort' => null]),
+                    ['class' => 'btn btn-sm btn-outline-secondary']) ?>
+            <?php endif; ?>
+            <?php foreach (['cr-q', 'cr-page', 'cr-sort'] as $k):
+                $v = Yii::$app->request->get($k);
+                if ($v !== null && $v !== ''): ?>
+                <input type="hidden" name="<?= Html::encode($k) ?>" value="<?= Html::encode($v) ?>">
+            <?php endif; endforeach; ?>
+        </form>
+
         <?php if ((int) $debugProvider->getTotalCount() === 0): ?>
-            <div class="cf-failed-empty">No failed debug-info files in this project. Healthy.</div>
+            <div class="cf-failed-empty">
+                <?= $debugQ === ''
+                    ? 'No failed debug-info files in this project. Healthy.'
+                    : 'No failed debug-info files match your search.' ?>
+            </div>
         <?php else: ?>
             <?= GridView::widget([
                 'dataProvider' => $debugProvider,
                 'layout'       => "{items}\n{pager}\n{summary}",
                 'columns' => [
                     [
-                        'header' => 'ID',
-                        'value'  => function ($d) {
+                        'attribute' => 'id',
+                        'label'     => 'ID',
+                        'value'     => function ($d) {
                             return Html::a('#' . (int) $d->id,
                                 ['/debug-info/view', 'id' => $d->id]);
                         },
-                        'format' => 'raw',
+                        'format'         => 'raw',
                         'contentOptions' => ['style' => 'white-space:nowrap; width:60px'],
                     ],
                     [
-                        'header' => 'File',
-                        'value'  => function ($d) {
+                        'attribute' => 'filename',
+                        'label'     => 'File',
+                        'value'     => function ($d) {
                             return Html::encode((string) $d->filename);
                         },
                         'format' => 'raw',
@@ -181,10 +255,9 @@ $session = Yii::$app->session;
                         'contentOptions' => ['style' => 'white-space:nowrap; width:120px'],
                     ],
                     [
-                        'header' => 'Status',
-                        'value'  => function ($d) {
-                            // Inline mapping so we don't depend on getStatusStr()
-                            // returning a particular string.
+                        'attribute' => 'status',
+                        'label'     => 'Status',
+                        'value'     => function ($d) {
                             $s = (int) $d->status;
                             if ($s === 4) return 'Invalid';
                             if (defined(Debuginfo::class . '::STATUS_UNSUPPORTED_FORMAT')
@@ -196,8 +269,9 @@ $session = Yii::$app->session;
                         'contentOptions' => ['style' => 'white-space:nowrap; width:140px'],
                     ],
                     [
-                        'header' => 'Uploaded',
-                        'value'  => function ($d) {
+                        'attribute' => 'dateuploaded',
+                        'label'     => 'Uploaded',
+                        'value'     => function ($d) {
                             return (int) $d->dateuploaded > 0
                                 ? date('Y-m-d H:i', (int) $d->dateuploaded)
                                 : '-';

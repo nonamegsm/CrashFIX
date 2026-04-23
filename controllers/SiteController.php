@@ -281,19 +281,26 @@ class SiteController extends Controller
         $canCrash  = (bool) $user->can('pperm_browse_some_crash_reports');
         $canDebug  = (bool) $user->can('pperm_browse_some_debug_info');
 
-        // Crash reports with status=Invalid, joined to their most
-        // recent processing error via a correlated subquery.
+        // Free-text search params (one per grid, distinct names so
+        // search/sort/page on one section never stomps the other).
+        $req    = Yii::$app->request;
+        $crashQ = trim((string) $req->get('cr-q', ''));
+        $debugQ = trim((string) $req->get('di-q', ''));
+
+        $peTbl = Processingerror::tableName();
+
+        // ---- Failed crash reports -------------------------------------
         $crashProvider = null;
         if ($projectId > 0 && $canCrash) {
             $crashQuery = Crashreport::find()
                 ->alias('cr')
                 ->select([
                     'cr.*',
-                    'last_error' => '(SELECT pe.message FROM ' . Processingerror::tableName() . ' pe
+                    'last_error' => "(SELECT pe.message FROM {$peTbl} pe
                                        WHERE pe.type = :pe_type_cr
                                          AND pe.srcid = cr.id
                                        ORDER BY pe.id DESC
-                                       LIMIT 1)',
+                                       LIMIT 1)",
                 ])
                 // status=4 is Invalid in the seeded `lookup` table
                 // (CrashReportStatus). Crashreport does not yet have
@@ -301,17 +308,43 @@ class SiteController extends Controller
                 // comment matches the model's existing style (see
                 // beforeSave() which writes $this->status = 1).
                 ->where(['cr.project_id' => $projectId, 'cr.status' => 4])
-                ->params([':pe_type_cr' => Processingerror::TYPE_CRASH_REPORT_ERROR])
-                ->orderBy(['cr.received' => SORT_DESC]);
+                ->params([':pe_type_cr' => Processingerror::TYPE_CRASH_REPORT_ERROR]);
+
+            // Free-text filter: matches filename / crashguid / any
+            // historical processingerror.message via EXISTS subquery.
+            // EXISTS keeps it as a single SQL pass and avoids HAVING-
+            // vs-WHERE alias scoping problems with `last_error`.
+            if ($crashQ !== '') {
+                $crashQuery->andWhere([
+                    'or',
+                    ['like', 'cr.srcfilename', $crashQ],
+                    ['like', 'cr.crashguid',   $crashQ],
+                    ['exists', (new \yii\db\Query())
+                        ->from($peTbl . ' pe2')
+                        ->where('pe2.srcid = cr.id')
+                        ->andWhere(['pe2.type' => Processingerror::TYPE_CRASH_REPORT_ERROR])
+                        ->andWhere(['like', 'pe2.message', $crashQ])
+                    ],
+                ]);
+            }
 
             $crashProvider = new ActiveDataProvider([
                 'query'      => $crashQuery,
                 'pagination' => ['pageSize' => 50, 'pageParam' => 'cr-page'],
-                'sort'       => false,
+                'sort'       => [
+                    'sortParam'    => 'cr-sort',
+                    'defaultOrder' => ['received' => SORT_DESC],
+                    'attributes'   => [
+                        'id'          => ['asc' => ['cr.id'          => SORT_ASC], 'desc' => ['cr.id'          => SORT_DESC]],
+                        'srcfilename' => ['asc' => ['cr.srcfilename' => SORT_ASC], 'desc' => ['cr.srcfilename' => SORT_DESC]],
+                        'received'    => ['asc' => ['cr.received'    => SORT_ASC], 'desc' => ['cr.received'    => SORT_DESC]],
+                        'filesize'    => ['asc' => ['cr.filesize'    => SORT_ASC], 'desc' => ['cr.filesize'    => SORT_DESC]],
+                    ],
+                ],
             ]);
         }
 
-        // Debug-info files with status in {Invalid, Unsupported format}.
+        // ---- Failed debug-info files ----------------------------------
         // STATUS_UNSUPPORTED_FORMAT (5) was added in the RFC-001 phase 1
         // migration; reference it via the const so old callers still work
         // if it has not been seeded yet (Lookup item missing != fatal).
@@ -321,34 +354,60 @@ class SiteController extends Controller
             if (defined(Debuginfo::class . '::STATUS_UNSUPPORTED_FORMAT')) {
                 $debugStatuses[] = Debuginfo::STATUS_UNSUPPORTED_FORMAT;
             }
+
             $debugQuery = Debuginfo::find()
                 ->alias('di')
                 ->select([
                     'di.*',
-                    'last_error' => '(SELECT pe.message FROM ' . Processingerror::tableName() . ' pe
+                    'last_error' => "(SELECT pe.message FROM {$peTbl} pe
                                        WHERE pe.type = :pe_type_di
                                          AND pe.srcid = di.id
                                        ORDER BY pe.id DESC
-                                       LIMIT 1)',
+                                       LIMIT 1)",
                 ])
                 ->where(['di.project_id' => $projectId])
                 ->andWhere(['in', 'di.status', $debugStatuses])
-                ->params([':pe_type_di' => Processingerror::TYPE_DEBUG_INFO_ERROR])
-                ->orderBy(['di.dateuploaded' => SORT_DESC]);
+                ->params([':pe_type_di' => Processingerror::TYPE_DEBUG_INFO_ERROR]);
+
+            if ($debugQ !== '') {
+                $debugQuery->andWhere([
+                    'or',
+                    ['like', 'di.filename', $debugQ],
+                    ['like', 'di.guid',     $debugQ],
+                    ['exists', (new \yii\db\Query())
+                        ->from($peTbl . ' pe2')
+                        ->where('pe2.srcid = di.id')
+                        ->andWhere(['pe2.type' => Processingerror::TYPE_DEBUG_INFO_ERROR])
+                        ->andWhere(['like', 'pe2.message', $debugQ])
+                    ],
+                ]);
+            }
 
             $debugProvider = new ActiveDataProvider([
                 'query'      => $debugQuery,
                 'pagination' => ['pageSize' => 50, 'pageParam' => 'di-page'],
-                'sort'       => false,
+                'sort'       => [
+                    'sortParam'    => 'di-sort',
+                    'defaultOrder' => ['dateuploaded' => SORT_DESC],
+                    'attributes'   => [
+                        'id'           => ['asc' => ['di.id'           => SORT_ASC], 'desc' => ['di.id'           => SORT_DESC]],
+                        'filename'     => ['asc' => ['di.filename'     => SORT_ASC], 'desc' => ['di.filename'     => SORT_DESC]],
+                        'status'       => ['asc' => ['di.status'       => SORT_ASC], 'desc' => ['di.status'       => SORT_DESC]],
+                        'dateuploaded' => ['asc' => ['di.dateuploaded' => SORT_ASC], 'desc' => ['di.dateuploaded' => SORT_DESC]],
+                        'filesize'     => ['asc' => ['di.filesize'     => SORT_ASC], 'desc' => ['di.filesize'     => SORT_DESC]],
+                    ],
+                ],
             ]);
         }
 
         return $this->render('failed', [
-            'crashProvider'  => $crashProvider,
-            'debugProvider'  => $debugProvider,
-            'projectId'      => $projectId,
-            'canCrash'       => $canCrash,
-            'canDebug'       => $canDebug,
+            'crashProvider' => $crashProvider,
+            'debugProvider' => $debugProvider,
+            'projectId'     => $projectId,
+            'canCrash'      => $canCrash,
+            'canDebug'      => $canDebug,
+            'crashQ'        => $crashQ,
+            'debugQ'        => $debugQ,
         ]);
     }
 
