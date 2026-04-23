@@ -12,7 +12,11 @@ use app\models\ContactForm;
 use app\models\RecoverPasswordForm;
 use app\models\ResetPasswordForm;
 use app\models\User;
+use app\models\Crashreport;
+use app\models\Debuginfo;
+use app\models\Processingerror;
 use app\components\MiscHelpers;
+use yii\data\ActiveDataProvider;
 
 class SiteController extends Controller
 {
@@ -40,10 +44,12 @@ class SiteController extends Controller
         return [
             'access' => [
                 'class' => AccessControl::class,
-                'only' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon', 'admin', 'daemon', 'daemon-status'],
+                'only' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
+                           'admin', 'daemon', 'daemon-status', 'failed', 'failed-retry'],
                 'rules' => [
                     [
-                        'actions' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon'],
+                        'actions' => ['index', 'logout', 'reset-password', 'set-cur-project', 'check-daemon',
+                                      'failed', 'failed-retry'],
                         'allow' => true,
                         'roles' => ['@'],
                     ],
@@ -58,6 +64,7 @@ class SiteController extends Controller
                 'class' => VerbFilter::class,
                 'actions' => [
                     'logout' => ['post'],
+                    'failed-retry' => ['post'],
                 ],
             ],
         ];
@@ -251,5 +258,161 @@ class SiteController extends Controller
         Yii::$app->user->setCurProjectId($proj);
         Yii::$app->user->setCurProjectVer($ver);
         return $this->redirect(Yii::$app->request->referrer ?: Yii::$app->homeUrl);
+    }
+
+    /**
+     * Show every crash-report and debug-info file in the current
+     * project that the daemon could not process. Each row is shown
+     * together with the most recent processing-error message so the
+     * user can see why it failed without clicking through to the
+     * detail page.
+     *
+     * Project-scoped via the user's current project. Anyone with at
+     * least one of the browse permissions sees the page; the two
+     * grids are individually gated and degrade to "you don't have
+     * access" when neither permission is held.
+     */
+    public function actionFailed()
+    {
+        $this->sidebarActiveItem = 'Failed';
+
+        $user      = Yii::$app->user;
+        $projectId = (int) $user->getCurProjectId();
+        $canCrash  = (bool) $user->can('pperm_browse_some_crash_reports');
+        $canDebug  = (bool) $user->can('pperm_browse_some_debug_info');
+
+        // Crash reports with status=Invalid, joined to their most
+        // recent processing error via a correlated subquery.
+        $crashProvider = null;
+        if ($projectId > 0 && $canCrash) {
+            $crashQuery = Crashreport::find()
+                ->alias('cr')
+                ->select([
+                    'cr.*',
+                    'last_error' => '(SELECT pe.message FROM ' . Processingerror::tableName() . ' pe
+                                       WHERE pe.type = :pe_type_cr
+                                         AND pe.srcid = cr.id
+                                       ORDER BY pe.id DESC
+                                       LIMIT 1)',
+                ])
+                // status=4 is Invalid in the seeded `lookup` table
+                // (CrashReportStatus). Crashreport does not yet have
+                // STATUS_* constants; using the raw integer with a
+                // comment matches the model's existing style (see
+                // beforeSave() which writes $this->status = 1).
+                ->where(['cr.project_id' => $projectId, 'cr.status' => 4])
+                ->params([':pe_type_cr' => Processingerror::TYPE_CRASH_REPORT_ERROR])
+                ->orderBy(['cr.received' => SORT_DESC]);
+
+            $crashProvider = new ActiveDataProvider([
+                'query'      => $crashQuery,
+                'pagination' => ['pageSize' => 50, 'pageParam' => 'cr-page'],
+                'sort'       => false,
+            ]);
+        }
+
+        // Debug-info files with status in {Invalid, Unsupported format}.
+        // STATUS_UNSUPPORTED_FORMAT (5) was added in the RFC-001 phase 1
+        // migration; reference it via the const so old callers still work
+        // if it has not been seeded yet (Lookup item missing != fatal).
+        $debugProvider = null;
+        if ($projectId > 0 && $canDebug) {
+            $debugStatuses = [Debuginfo::STATUS_INVALID];
+            if (defined(Debuginfo::class . '::STATUS_UNSUPPORTED_FORMAT')) {
+                $debugStatuses[] = Debuginfo::STATUS_UNSUPPORTED_FORMAT;
+            }
+            $debugQuery = Debuginfo::find()
+                ->alias('di')
+                ->select([
+                    'di.*',
+                    'last_error' => '(SELECT pe.message FROM ' . Processingerror::tableName() . ' pe
+                                       WHERE pe.type = :pe_type_di
+                                         AND pe.srcid = di.id
+                                       ORDER BY pe.id DESC
+                                       LIMIT 1)',
+                ])
+                ->where(['di.project_id' => $projectId])
+                ->andWhere(['in', 'di.status', $debugStatuses])
+                ->params([':pe_type_di' => Processingerror::TYPE_DEBUG_INFO_ERROR])
+                ->orderBy(['di.dateuploaded' => SORT_DESC]);
+
+            $debugProvider = new ActiveDataProvider([
+                'query'      => $debugQuery,
+                'pagination' => ['pageSize' => 50, 'pageParam' => 'di-page'],
+                'sort'       => false,
+            ]);
+        }
+
+        return $this->render('failed', [
+            'crashProvider'  => $crashProvider,
+            'debugProvider'  => $debugProvider,
+            'projectId'      => $projectId,
+            'canCrash'       => $canCrash,
+            'canDebug'       => $canDebug,
+        ]);
+    }
+
+    /**
+     * POST /site/failed-retry
+     *
+     * Re-queue a single failed item by flipping its status back to
+     * Waiting (1). The daemon picks it up on the next poll cycle.
+     * Existing processingerror rows are NOT deleted so the user can
+     * still see what went wrong; if the retry succeeds the row is
+     * simply rewritten to Ready/Processed and a fresh error appears
+     * on the next failure (if any).
+     *
+     * Inputs (POST):
+     *   kind = "crash" | "debug"
+     *   id   = integer primary key in the matching table
+     *
+     * Always redirects back to /site/failed with a flash message.
+     */
+    public function actionFailedRetry()
+    {
+        $kind = (string) Yii::$app->request->post('kind', '');
+        $id   = (int)    Yii::$app->request->post('id', 0);
+        $projectId = (int) Yii::$app->user->getCurProjectId();
+        $session = Yii::$app->session;
+
+        if ($id <= 0 || ($kind !== 'crash' && $kind !== 'debug')) {
+            $session->setFlash('failed-retry-error', 'Invalid retry request.');
+            return $this->redirect(['failed']);
+        }
+
+        if ($kind === 'crash') {
+            if (!Yii::$app->user->can('pperm_browse_some_crash_reports')) {
+                throw new \yii\web\ForbiddenHttpException();
+            }
+            $row = Crashreport::find()
+                ->where(['id' => $id, 'project_id' => $projectId])
+                ->one();
+            if ($row === null) {
+                $session->setFlash('failed-retry-error', "Crash report #{$id} not found in current project.");
+                return $this->redirect(['failed']);
+            }
+            $row->status = 1; // Waiting (CrashReportStatus code 1)
+            $row->save(false, ['status']);
+            $session->setFlash('failed-retry-success',
+                "Crash report #{$id} re-queued. Daemon will retry on the next poll cycle.");
+            return $this->redirect(['failed']);
+        }
+
+        // kind === 'debug'
+        if (!Yii::$app->user->can('pperm_browse_some_debug_info')) {
+            throw new \yii\web\ForbiddenHttpException();
+        }
+        $row = Debuginfo::find()
+            ->where(['id' => $id, 'project_id' => $projectId])
+            ->one();
+        if ($row === null) {
+            $session->setFlash('failed-retry-error', "Debug info #{$id} not found in current project.");
+            return $this->redirect(['failed']);
+        }
+        $row->status = Debuginfo::STATUS_WAITING;
+        $row->save(false, ['status']);
+        $session->setFlash('failed-retry-success',
+            "Debug info file #{$id} re-queued. Daemon will retry on the next poll cycle.");
+        return $this->redirect(['failed']);
     }
 }

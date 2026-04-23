@@ -14,7 +14,12 @@ use Yii;
  */
 class Processingerror extends \yii\db\ActiveRecord
 {
-
+    // Type discriminator. Matches the constants in the Yii1 legacy
+    // model (protected/models/ProcessingError.php) so the same
+    // tbl_processingerror table can be read consistently from both
+    // frontends.
+    const TYPE_CRASH_REPORT_ERROR = 1;
+    const TYPE_DEBUG_INFO_ERROR   = 2;
 
     /**
      * {@inheritdoc}

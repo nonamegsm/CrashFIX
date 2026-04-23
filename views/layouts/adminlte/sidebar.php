@@ -52,7 +52,18 @@
                         'icon' => 'info-circle',
                         'visible' => Yii::$app->user->can('pperm_browse_some_debug_info')
                     ],
-                    
+                    [
+                        'label' => 'Failed Items',
+                        'url' => ['/site/failed'],
+                        'icon' => 'exclamation-triangle',
+                        // Visible to anyone with at least one of the relevant
+                        // browse permissions; the page itself gates each
+                        // section individually.
+                        'visible' =>
+                               Yii::$app->user->can('pperm_browse_some_crash_reports')
+                            || Yii::$app->user->can('pperm_browse_some_debug_info'),
+                    ],
+
                     ['label' => 'ADMINISTRATION', 'header' => true, 'visible' => Yii::$app->user->can('gperm_access_admin_panel')],
                     [
                         'label' => 'Administer',
