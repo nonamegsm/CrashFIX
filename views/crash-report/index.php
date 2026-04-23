@@ -1,7 +1,7 @@
 <?php
 
 /** @var yii\web\View $this */
-/** @var app\models\Crashreport $model */
+/** @var app\models\CrashreportSearch $model */
 /** @var yii\data\ActiveDataProvider $dataProvider */
 
 use yii\helpers\Html;
@@ -43,6 +43,8 @@ $myProjects = $user->getMyProjects();
             </form>
         </div>
     </div>
+
+    <?= $this->render('_search', ['model' => $model]) ?>
 
     <?= $this->render('_reportList', [
         'model' => $model,

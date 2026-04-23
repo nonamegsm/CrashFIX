@@ -1,7 +1,7 @@
 <?php
 
 /** @var yii\web\View $this */
-/** @var app\models\Crashreport $model */
+/** @var app\models\Crashreport $model (often a CrashreportSearch instance on the index page) */
 /** @var yii\data\ActiveDataProvider $dataProvider */
 /** @var int|null $groupid Optional crash-group id when this list is rendered inside a group view */
 
@@ -163,7 +163,10 @@ $formId    = 'cf-bulk-form-crashreports';
                         return $data->appversion ? $data->appversion->version : '';
                     },
                 ],
-                'ip_address',
+                [
+                    'attribute' => 'ipaddress',
+                    'label' => 'IP',
+                ],
                 [
                     'attribute' => 'filesize',
                     'value' => function ($data) {
@@ -176,7 +179,13 @@ $formId    = 'cf-bulk-form-crashreports';
                 ],
                 [
                     'label' => 'Address',
-                    'value' => 'exception_address',
+                    'value' => function ($data) {
+                        $a = $data->exceptionaddress;
+                        if ($a === null || (int) $a === 0) {
+                            return '';
+                        }
+                        return '0x' . base_convert((string) $a, 10, 16);
+                    },
                 ],
             ],
         ]); ?>
