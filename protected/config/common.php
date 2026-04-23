@@ -29,6 +29,15 @@ function dbParams($overrideTablePrefix=null)
             'username'=>$userParams['db_username'],
             'password'=>$userParams['db_password'],
 			'tablePrefix' => $overrideTablePrefix==null?$userParams['db_table_prefix']:$overrideTablePrefix,
+			// Force utf8mb4 on every connection so that crash reports
+			// containing non-Latin-1 strings (Cyrillic, CJK, emoji,
+			// German esszett, ...) do not blow up tbl_customprop /
+			// tbl_crashreport inserts with
+			//   "Incorrect string value: '\xD0\xA4...' for column ..."
+			// `utf8mb4` is the full 4-byte UTF-8; the older alias
+			// `utf8` is the deprecated 3-byte form that rejects
+			// supplementary-plane chars (most emojis).
+			'charset' => 'utf8mb4',
             //'emulatePrepare'=>true,  // needed by some MySQL installations
 		    //'schemaCachingDuration'=>3600, // one hour        
         );
