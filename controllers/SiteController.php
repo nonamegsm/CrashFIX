@@ -32,7 +32,7 @@ class SiteController extends Controller
             return false;
         }
 
-        if (!is_file(Yii::getAlias('@app/config/installed.txt'))) {
+        if (YII_ENV !== 'test' && !is_file(Yii::getAlias('@app/config/installed.txt'))) {
             if ($action->id !== 'error') {
                 return $this->redirect(['install/index'])->send();
             }
