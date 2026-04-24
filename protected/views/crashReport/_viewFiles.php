@@ -25,9 +25,14 @@ if (!function_exists('cf_crash_report_file_actions')) {
 			$view = ' <span class="cf-file-view-na" style="color:#999;margin-left:8px" title="No in-browser preview for this file type. Use Download.">View</span>';
 			return '<span class="cf-file-actions">'.$dl.$view.'</span>';
 		}
+		$ctrl = Yii::app()->getController();
 		$previewUrl = $kind === 'text'
-			? Yii::app()->createUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt))
-			: Yii::app()->createUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt));
+			? ($ctrl
+				? $ctrl->createAbsoluteUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt))
+				: Yii::app()->createUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt)))
+			: ($ctrl
+				? $ctrl->createAbsoluteUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt))
+				: Yii::app()->createUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt)));
 		$view = CHtml::htmlButton('View', array(
 			'type' => 'button',
 			'class' => 'cf-file-preview-launch',
