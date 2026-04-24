@@ -174,6 +174,9 @@ class CrashReportController extends Controller
 		if (!in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp'), true)) {
 			throw new CHttpException(400, 'Inline preview is only available for image types.');
 		}
+		if (ob_get_length()) {
+			ob_clean();
+		}
 		$model->dumpFileItemContent($name, false);
 		Yii::app()->end();
 	}

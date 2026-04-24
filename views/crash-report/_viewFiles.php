@@ -136,13 +136,48 @@ $this->registerJs(<<<JS
         \$load.removeClass('d-none');
 
         if (type === 'image') {
-            \$load.addClass('d-none');
-            \$img.off('error').on('error', function () {
-                \$imgW.addClass('d-none');
-                \$err.removeClass('d-none').text('Could not load image preview.');
-            });
-            \$img.attr('src', url).attr('alt', fname);
-            \$imgW.removeClass('d-none');
+            var xhr = new XMLHttpRequest();
+            xhr.open('GET', url, true);
+            xhr.responseType = 'arraybuffer';
+            xhr.onload = function () {
+                \$load.addClass('d-none');
+                if (xhr.status !== 200) {
+                    \$err.removeClass('d-none').text('Could not load image (HTTP ' + xhr.status + ').');
+                    return;
+                }
+                var buf = xhr.response;
+                if (!buf || !buf.byteLength) {
+                    \$err.removeClass('d-none').text('Empty image response.');
+                    return;
+                }
+                var u8 = new Uint8Array(buf);
+                var isImage = (u8[0] === 0xFF && u8[1] === 0xD8)
+                    || (u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47)
+                    || (u8[0] === 0x47 && u8[1] === 0x49 && u8[2] === 0x46)
+                    || (u8[0] === 0x52 && u8[1] === 0x49 && u8[2] === 0x46 && u8[3] === 0x46 && u8[8] === 0x57 && u8[9] === 0x45 && u8[10] === 0x42 && u8[11] === 0x50);
+                if (!isImage) {
+                    \$err.removeClass('d-none').text('Could not load image preview (file missing or response is not an image).');
+                    return;
+                }
+                var rawCt = (xhr.getResponseHeader('Content-Type') || 'image/jpeg').split(';')[0].trim();
+                var mime = (rawCt.indexOf('image/') === 0) ? rawCt : 'image/jpeg';
+                var blob = new Blob([buf], { type: mime });
+                var o = URL.createObjectURL(blob);
+                \$img.off('load error');
+                \$img.on('load', function () { try { URL.revokeObjectURL(o); } catch (e) {} });
+                \$img.on('error', function () {
+                    try { URL.revokeObjectURL(o); } catch (e) {}
+                    \$imgW.addClass('d-none');
+                    \$err.removeClass('d-none').text('Could not display image preview.');
+                });
+                \$img.attr('src', o).attr('alt', fname);
+                \$imgW.removeClass('d-none');
+            };
+            xhr.onerror = function () {
+                \$load.addClass('d-none');
+                \$err.removeClass('d-none').text('Could not load image preview (network).');
+            };
+            xhr.send();
             return;
         }
 

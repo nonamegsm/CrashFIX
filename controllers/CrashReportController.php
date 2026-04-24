@@ -131,6 +131,9 @@ class CrashReportController extends Controller
         if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
             throw new BadRequestHttpException('Inline preview is only available for image types.');
         }
+        if (ob_get_length()) {
+            ob_clean();
+        }
         $model->dumpFileItemContent($name, false);
     }
 
