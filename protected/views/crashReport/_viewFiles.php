@@ -58,7 +58,8 @@ if (!function_exists('cf_crash_report_file_size_text')) {
 		if ($reportId <= 0) {
 			return '';
 		}
-		static $cache = array();
+		static $cache = array();      // per file: "reportId|name" => "12 KB"
+		static $sizeMaps = array();   // per report: reportId => [name => "12 KB"]
 		static $models = array();
 		$key = $reportId . '|' . $name;
 		if (isset($cache[$key])) {
@@ -72,18 +73,32 @@ if (!function_exists('cf_crash_report_file_size_text')) {
 			$cache[$key] = 'n/a';
 			return $cache[$key];
 		}
-		$tmp = $reportModel->extractFileItem($name);
-		if ($tmp === false || !is_file($tmp)) {
-			$cache[$key] = 'n/a';
-			return $cache[$key];
+		if (!array_key_exists($reportId, $sizeMaps)) {
+			$sizeMaps[$reportId] = array();
+			if (class_exists('ZipArchive')) {
+				$zipPath = $reportModel->getLocalFilePath();
+				if (is_string($zipPath) && is_file($zipPath)) {
+					$zip = new ZipArchive();
+					$opened = @$zip->open($zipPath);
+					if ($opened === true) {
+						for ($i = 0; $i < $zip->numFiles; $i++) {
+							$st = $zip->statIndex($i);
+							if (!is_array($st) || !isset($st['name'])) {
+								continue;
+							}
+							$entryName = (string) $st['name'];
+							$entrySize = isset($st['size']) ? (int) $st['size'] : -1;
+							$sizeMaps[$reportId][$entryName] = $entrySize >= 0
+								? CHtml::encode(MiscHelpers::fileSizeToStr($entrySize))
+								: 'n/a';
+						}
+						$zip->close();
+					}
+				}
+			}
 		}
-		try {
-			$size = (int) @filesize($tmp);
-			$cache[$key] = CHtml::encode(MiscHelpers::fileSizeToStr($size));
-			return $cache[$key];
-		} finally {
-			@unlink($tmp);
-		}
+		$cache[$key] = isset($sizeMaps[$reportId][$name]) ? $sizeMaps[$reportId][$name] : 'n/a';
+		return $cache[$key];
 	}
 }
 ?>
