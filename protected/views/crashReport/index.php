@@ -19,14 +19,15 @@ You have no projects assigned.
 		Current Project:
 		<?php 		
 			$models = Yii::app()->user->getMyProjects();
-			$projects = CHtml::listData($models, 'id', 'name');			
-			echo CHtml::dropDownList('proj', array('selected'=>Yii::app()->user->getCurProjectId()), $projects); 			
+			$projects = CHtml::listData($models, 'id', 'name');
+			$curProj = Yii::app()->user->getCurProjectId();
+			echo CHtml::dropDownList('proj', $curProj, $projects);
 		?>					
 		Version:
 		<?php 		
 			$selVer = -1;
-			$versions = Yii::app()->user->getCurProjectVersions($selVer);			
-			echo CHtml::dropDownList('ver', array('selected'=>$selVer), $versions); 
+			$versions = Yii::app()->user->getCurProjectVersions($selVer);
+			echo CHtml::dropDownList('ver', $selVer, $versions);
 		?>		
 	</div>
 	<?php echo CHtml::endForm(); ?>		

@@ -36,9 +36,10 @@
 	<div class="row">
 	<?php echo CHtml::activeLabel($model,'status'); ?>	
 	<?php 
-		$statuses = Lookup::items('CrashReportStatus', $model->status);
+		$statuses = Lookup::items('CrashReportStatus');
 		$statuses = array(-1=>'<any>')+$statuses;
-		echo CHtml::dropDownList('CrashReport[status]', array('selected'=>$model->status), $statuses); 
+		$statusSel = ($model->status === null || $model->status === '' ? -1 : $model->status);
+		echo CHtml::dropDownList('CrashReport[status]', $statusSel, $statuses); 
 	?>
 	</div>
 	<div class="row">
@@ -172,7 +173,7 @@
           array(            
               'name' => 'id',
 			  'type' => 'raw',
-			  'value' => 'CHtml::link($data->id, array(\'crashReport/view/\', \'id\'=>$data->id))',	  			  			 
+			  'value' => 'CHtml::link($data->id, array("crashReport/view", "id" => $data->id))',	  			  			 
 			  'cssClassExpression' => '"column-right-align"',
           ),		  
 		  array(                          			  

@@ -54,7 +54,7 @@ class CrashReport extends CActiveRecord
 			array('description', 'length', 'max'=>256),
 			array('crashrptver', 'numerical', 'integerOnly'=>true, 'min'=>1000, 'max'=>9999, 'except'=>'search'),
 			// The following rules is used on search
-			array('id, received, status, md5, crashguid, appversion, ipaddress, emailfrom, description', 'safe', 'on'=>'search'),
+			array('id, received, status, md5, crashguid, appversion, ipaddress, emailfrom, description, filter, isAdvancedSearch, receivedFrom, receivedTo, groupid', 'safe', 'on'=>'search'),
 			array('receivedTo', 'compareFromToDates', 'on'=>'search'),
 		);
 		
@@ -763,20 +763,39 @@ class CrashReport extends CActiveRecord
 	}
 
 	/**
+	 * Empty grid when search cannot run (avoids CGridView fatal on null dataProvider).
+	 * @return CActiveDataProvider
+	 */
+	protected function searchEmptyDataProvider()
+	{
+		$c = new CDbCriteria();
+		$c->addCondition('0=1');
+		return new CActiveDataProvider($this, array(
+			'criteria' => $c,
+			'pagination' => array('pageSize' => 50),
+			'sort' => array(
+				'defaultOrder' => 'received DESC',
+			),
+		));
+	}
+
+	/**
 	 * Retrieves a list of models based on the current search/filter conditions.
-	 * @return CActiveDataProvider the data provider that can return the models based on the search/filter conditions.
+	 * @return CActiveDataProvider
 	 */
 	public function search()
 	{
 		// Validate model
 		$this->scenario = 'search';
-		if(!$this->validate())
-			return Null;
+		if (!$this->validate()) {
+			return $this->searchEmptyDataProvider();
+		}
 		
 		// Check that current project is selected.
 		$curProjectId = Yii::app()->user->getCurProjectId();
-		if($curProjectId==false)
-			return Null;
+		if ($curProjectId == false) {
+			return $this->searchEmptyDataProvider();
+		}
 		
 		// Create empty search criteria
 		$criteria=new CDbCriteria;        
@@ -814,10 +833,11 @@ class CrashReport extends CActiveRecord
 				$criteria->compare('emailfrom', $this->emailfrom, true, 'AND');			
 			if($this->status!=-1)
 				$criteria->compare('status', $this->status, false, 'AND');			
-			if($this->receivedFrom !== '' && $this->receivedTo !== '')
+			if (!empty($this->receivedFrom) && !empty($this->receivedTo)) {
 				$criteria->addBetweenCondition('received', 
 						$this->strToDate($this->receivedFrom), 
-						$this->strToDate($this->receivedTo), 'AND');						
+						$this->strToDate($this->receivedTo), 'AND');
+			}						
 		}
 						
 		// Perform search
