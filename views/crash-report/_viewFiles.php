@@ -2,20 +2,11 @@
 /** @var yii\web\View $this */
 /** @var app\models\Crashreport $model */
 
-use yii\data\ArrayDataProvider;
 use yii\grid\GridView;
 use yii\helpers\Html;
 use yii\helpers\Url;
 use app\components\MiscHelpers;
 use app\models\Crashreport;
-
-$zipMembers = $model->listZipCentralDirectoryMembers();
-$zipOnDisk = $model->isZipArchiveOnDisk();
-$zipIndexProvider = new ArrayDataProvider([
-    'allModels' => $zipMembers,
-    'pagination' => false,
-    'key' => 'path',
-]);
 
 $renderNameWithPreview = static function (string $filename, int $rpt): string {
     $kind = Crashreport::previewUiKind($filename);
@@ -66,53 +57,7 @@ $renderNameWithPreview = static function (string $filename, int $rpt): string {
         </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header bg-white">
-            <h6 class="mb-0">ZIP archive index</h6>
-        </div>
-        <div class="card-body">
-            <p class="text-muted small mb-3">
-                Member names and <strong>uncompressed</strong> sizes read from the ZIP central directory on the server.
-                Nothing is extracted to build this table.
-            </p>
-            <?php if (!$zipOnDisk): ?>
-                <p class="text-muted fst-italic mb-0">The archive file is not present on disk (or storage is unavailable).</p>
-            <?php elseif ($zipMembers === []): ?>
-                <p class="text-muted fst-italic mb-0">No entries could be read (empty or unreadable archive).</p>
-            <?php else: ?>
-                <?= GridView::widget([
-                    'dataProvider' => $zipIndexProvider,
-                    'summary' => false,
-                    'emptyText' => 'No members.',
-                    'columns' => [
-                        [
-                            'label' => 'Member path',
-                            'format' => 'raw',
-                            'value' => function ($row) use ($model, $renderNameWithPreview) {
-                                if (!empty($row['is_dir'])) {
-                                    return Html::encode($row['path']);
-                                }
-
-                                return $renderNameWithPreview($row['path'], (int) $model->id);
-                            },
-                        ],
-                        [
-                            'label' => 'Uncompressed size',
-                            'value' => function ($row) {
-                                if (!empty($row['is_dir'])) {
-                                    return '—';
-                                }
-
-                                return MiscHelpers::fileSizeToStr((int) $row['size']);
-                            },
-                        ],
-                    ],
-                ]) ?>
-            <?php endif; ?>
-        </div>
-    </div>
-
-    <p class="text-muted small">Registered file items (database metadata and descriptions). You can download each file from the archive:</p>
+    <p class="text-muted small">File items from the report database (names and descriptions; same members as the ZIP archive when processing completed normally):</p>
 
     <?= GridView::widget([
         'dataProvider' => $model->searchFileItems(),
