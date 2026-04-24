@@ -1037,13 +1037,73 @@ class CrashReport extends CActiveRecord
 	}
 	
 	/**
+	 * UI hint for Files-tab preview: text, image, or null (download only).
+	 * @param string $filename
+	 * @return string|null
+	 */
+	public static function previewUiKind($filename)
+	{
+		$ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+		if (in_array($ext, array('txt', 'xml', 'log', 'json', 'csv', 'md'), true)) {
+			return 'text';
+		}
+		if (in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp'), true)) {
+			return 'image';
+		}
+		return null;
+	}
+
+	/**
+	 * Read start of a ZIP member as UTF-8 text for JSON preview (temp extract).
+	 * @param string $itemName
+	 * @param int $maxBytes
+	 * @return array content, truncated, size
+	 */
+	public function readFileItemTextPreview($itemName, $maxBytes)
+	{
+		$tmpfile = $this->extractFileItem($itemName);
+		if ($tmpfile == false) {
+			throw new CHttpException(404, 'File does not exist.');
+		}
+		try {
+			$size = (int) @filesize($tmpfile);
+			$fd = fopen($tmpfile, 'rb');
+			if ($fd === false) {
+				throw new CHttpException(500, 'Could not read file.');
+			}
+			$content = stream_get_contents($fd, $maxBytes + 1);
+			fclose($fd);
+			if ($content === false) {
+				$content = '';
+			}
+			$truncated = strlen($content) > $maxBytes;
+			if ($truncated) {
+				$content = substr($content, 0, $maxBytes);
+			}
+			if ($content !== '' && function_exists('mb_check_encoding') && !mb_check_encoding($content, 'UTF-8')) {
+				$converted = @mb_convert_encoding($content, 'UTF-8', 'Windows-1252, ISO-8859-1, UTF-8');
+				if (is_string($converted) && $converted !== '') {
+					$content = $converted;
+				}
+			}
+			return array(
+				'content' => $content,
+				'truncated' => $truncated,
+				'size' => $size,
+			);
+		} finally {
+			@unlink($tmpfile);
+		}
+	}
+
+	/**
 	 * This method dumps the content of a given zipped file to stdout or to a file.
 	 * This method is used when downloading the crash report file contents.
-	 * @param $itemName Name of file item.
-	 * @param $asOctetStream If true, dumps as application/octet stream.
-	 * @param $file File name; can be Null.
-	 * @throw CHttpException
+	 * @param string $itemName Name of file item.
+	 * @param bool $asOctetStream If true, attachment download; if false, inline-friendly MIME when known.
+	 * @param string|null $file If set, write to this path instead of stdout.
 	 * @return void
+	 * @throws CHttpException
 	 */
 	public function dumpFileItemContent($itemName, $asOctetStream=true, $file=null)
 	{
@@ -1068,18 +1128,33 @@ class CrashReport extends CActiveRecord
 			if(!$asOctetStream)
 			{
 				$path_parts = pathinfo($itemName);
-				$ext = $path_parts['extension'];
-				if(strcasecmp($ext,'jpg')==0)
-					$mimeType = 'image/jpg';
+				$ext = isset($path_parts['extension']) ? $path_parts['extension'] : '';
+				if(strcasecmp($ext,'jpg')==0 || strcasecmp($ext,'jpeg')==0)
+					$mimeType = 'image/jpeg';
 				else if(strcasecmp($ext,'png')==0)
 					$mimeType = 'image/png';
+				else if(strcasecmp($ext,'gif')==0)
+					$mimeType = 'image/gif';
+				else if(strcasecmp($ext,'webp')==0)
+					$mimeType = 'image/webp';
                 else if(strcasecmp($ext,'ogg')==0)
 					$mimeType = 'video/ogg';
+				else if(strcasecmp($ext,'xml')==0)
+					$mimeType = 'application/xml; charset=UTF-8';
+				else if(strcasecmp($ext,'txt')==0 || strcasecmp($ext,'log')==0 || strcasecmp($ext,'csv')==0 || strcasecmp($ext,'md')==0)
+					$mimeType = 'text/plain; charset=UTF-8';
+				else if(strcasecmp($ext,'json')==0)
+					$mimeType = 'application/json; charset=UTF-8';
 			}
 			
 			// Write HTTP headers
 			header("Content-type: $mimeType");
-			header("Content-Disposition: filename=\"".$itemName."\"");
+			$leaf = basename(str_replace(array("\r", "\n"), '', $itemName));
+			if ($asOctetStream) {
+				header('Content-Disposition: attachment; filename="' . str_replace(array('\\', '"'), array('\\\\', '\\"'), $leaf) . '"');
+			} else {
+				header('Content-Disposition: inline; filename="' . str_replace(array('\\', '"'), array('\\\\', '\\"'), $leaf) . '"');
+			}
     		header("Content-length: $fsize");
 			header("Cache-control: private"); //use this to open files directly
 			

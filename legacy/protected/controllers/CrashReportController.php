@@ -45,7 +45,9 @@ class CrashReportController extends Controller
 				'actions'=>array(
 					'index', 
 					'view', 
-					'extractFile', 
+					'extractFile',
+					'inlineFile',
+					'previewFileText',
 					'download', 
 					'viewScreenshot', 
 					'viewScreenshotThumbnail', 
@@ -157,6 +159,45 @@ class CrashReportController extends Controller
 		
 		// Dump requested file item to stdout
 		$model->dumpFileItemContent($name);		
+	}
+
+	/**
+	 * Stream a ZIP member with inline disposition (modal / new-tab preview for images).
+	 */
+	public function actionInlineFile($name, $rpt)
+	{
+		$model = $this->loadModel($rpt);
+		$this->checkAuthorization($model);
+		$ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+		if (!in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp'), true)) {
+			throw new CHttpException(400, 'Inline preview is only available for image types.');
+		}
+		$model->dumpFileItemContent($name, false);
+	}
+
+	/**
+	 * JSON: first chunk of text-like ZIP member for AJAX modal preview.
+	 */
+	public function actionPreviewFileText($name, $rpt)
+	{
+		$model = $this->loadModel($rpt);
+		$this->checkAuthorization($model);
+		$ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+		if (!in_array($ext, array('txt', 'xml', 'log', 'json', 'csv', 'md'), true)) {
+			throw new CHttpException(400, 'Text preview is not enabled for this file type.');
+		}
+		$maxBytes = 512 * 1024;
+		$result = $model->readFileItemTextPreview($name, $maxBytes);
+		header('Content-Type: application/json; charset=UTF-8');
+		echo CJSON::encode(array(
+			'ok' => true,
+			'filename' => basename($name),
+			'truncated' => $result['truncated'],
+			'size' => $result['size'],
+			'maxBytes' => $maxBytes,
+			'content' => $result['content'],
+		));
+		Yii::app()->end();
 	}
 	
 	/**
