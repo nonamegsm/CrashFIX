@@ -15,41 +15,41 @@ $this->widget('zii.widgets.CMenu', array(
 			'items'=>array(				
 				array(
                     'label'=>'Summary', 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Summary'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Summary'), 
                     'active'=>$activeItem=='Summary'
                     ),
                 array(
                     'label'=>'Files', 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Files'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Files'), 
                     'active'=>$activeItem=='Files',                    
                     ),
 				array(
                     'label'=>'Custom Props'.($customProps->totalItemCount>0?' ('.$customProps->totalItemCount.')':''), 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=CustomProps'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'CustomProps'), 
                     'active'=>$activeItem=='CustomProps',
                     'linkOptions'=>array('class'=>($customProps->totalItemCount>0?'':'menu-item-grayed')),
                     ),
 				array(
                     'label'=>'Screenshots'.($screenshots->totalItemCount>0?' ('.$screenshots->totalItemCount.')':''), 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Screenshots'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Screenshots'), 
                     'active'=>$activeItem=='Screenshots',
                     'linkOptions'=>array('class'=>($screenshots->totalItemCount>0?'':'menu-item-grayed')),
                     ),
                 array(
                     'label'=>'Videos'.($videos->totalItemCount>0?' ('.$videos->totalItemCount.')':''), 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Videos'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Videos'), 
                     'active'=>$activeItem=='Videos',
                     'linkOptions'=>array('class'=>($videos->totalItemCount>0?'':'menu-item-grayed')),
                     ),
 				array(
                     'label'=>'Threads'.($threads->totalItemCount>0?' ('.$threads->totalItemCount.')':''), 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Threads'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Threads'), 
                     'active'=>$activeItem=='Threads',
                     'linkOptions'=>array('class'=>($threads->totalItemCount>0?'':'menu-item-grayed')),
                     ),
 				array(
                     'label'=>'Modules'.($modules->totalItemCount>0?' ('.$modules->totalItemCount.')':''), 
-                    'url'=>array('crashReport/view/'.$model->id.'?tab=Modules'), 
+                    'url'=>array('crashReport/view', 'id'=>$model->id, 'tab'=>'Modules'), 
                     'active'=>$activeItem=='Modules',
                     'linkOptions'=>array('class'=>($modules->totalItemCount>0?'':'menu-item-grayed')),
                     ),								
