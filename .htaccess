@@ -1,17 +1,21 @@
-# Apache is pointed at the project root (e.g. http://127.0.0.1/greta_crashfix/), not /web.
-# Route the Yii2 front controller at web/index.php so @webroot stays correct (…/web).
+# Apache is pointed at the project root (e.g. http://127.0.0.1/greta_crashfix/).
+# This project runs Yii1 from root index.php.
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /greta_crashfix/
 
-    # Directory /greta_crashfix/ — otherwise Apache stops on the existing directory (no !-d).
-    RewriteRule ^$ web/index.php [L]
+    # Normalize legacy Yii2-style URLs to Yii1 root URLs.
+    RewriteRule ^web$ /greta_crashfix/ [R=302,L]
+    RewriteRule ^web/(.*)$ /greta_crashfix/$1 [R=302,L]
 
-    # Existing files under the repo (incl. web/assets, static files under /web/…)
+    # Directory /greta_crashfix/ — route explicitly to Yii1 front controller.
+    RewriteRule ^$ index.php [L]
+
+    # Existing files under the repo are served directly.
     RewriteCond %{REQUEST_FILENAME} -f
     RewriteRule ^ - [L]
 
-    # Pretty URLs: everything else goes to the Yii2 web app
+    # Pretty URLs: everything else goes to Yii1.
     RewriteCond %{REQUEST_FILENAME} !-d
-    RewriteRule . web/index.php [L]
+    RewriteRule . index.php [L]
 </IfModule>

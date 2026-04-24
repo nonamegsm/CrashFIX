@@ -1,12 +1,17 @@
 <?php
 
-// comment out the following two lines when deployed to production
-defined('YII_DEBUG') or define('YII_DEBUG', true);
-defined('YII_ENV') or define('YII_ENV', 'dev');
+// Legacy compatibility shim: this repository currently runs Yii1 from /index.php.
+// If /web/index.php is requested directly, redirect to the equivalent non-/web path.
+$requestUri = isset($_SERVER['REQUEST_URI']) ? (string)$_SERVER['REQUEST_URI'] : '';
+$targetUri = preg_replace('#/web(/|$)#', '/', $requestUri, 1);
 
-require __DIR__ . '/../vendor/autoload.php';
-require __DIR__ . '/../vendor/yiisoft/yii2/Yii.php';
+if (!is_string($targetUri) || $targetUri === '') {
+    $targetUri = '/';
+}
 
-$config = require __DIR__ . '/../config/web.php';
+if ($targetUri !== $requestUri) {
+    header('Location: ' . $targetUri, true, 302);
+    exit;
+}
 
-(new yii\web\Application($config))->run();
+require dirname(__DIR__) . '/index.php';
