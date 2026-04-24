@@ -306,6 +306,10 @@ class CrashReport extends CActiveRecord
 	 */
 	public function listZipCentralDirectoryMembers()
 	{
+		// PHP zip extension (php-zip) provides ZipArchive; without it, skip index UI only.
+		if (!class_exists('ZipArchive', false)) {
+			return array();
+		}
 		$path = $this->getLocalFilePath();
 		if ($path === false || !is_file($path)) {
 			return array();
