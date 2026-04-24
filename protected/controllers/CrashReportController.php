@@ -146,7 +146,8 @@ class CrashReportController extends Controller
 		$this->checkAuthorization($model);
 		
 		// Dump crash report file to stdout
-		$model->dumpFileAttachmentContent();		
+		$model->dumpFileAttachmentContent();
+		Yii::app()->end();
 	}
 		
 	/**
@@ -161,7 +162,8 @@ class CrashReportController extends Controller
 		$this->checkAuthorization($model);
 		
 		// Dump requested file item to stdout
-		$model->dumpFileItemContent($name);		
+		$model->dumpFileItemContent($name);
+		Yii::app()->end();
 	}
 
 	/**
@@ -176,6 +178,8 @@ class CrashReportController extends Controller
 			throw new CHttpException(400, 'Inline preview is only available for image types.');
 		}
 		$model->dumpFileItemContent($name, false);
+		// End immediately so no log layout / trailing output corrupts binary image data (breaks <img> preview).
+		Yii::app()->end();
 	}
 
 	/**
@@ -215,7 +219,8 @@ class CrashReportController extends Controller
 		$this->checkAuthorization($model);
 				
 		// Dump requested file item to stdout
-		$model->dumpFileItemContent($name, false);			
+		$model->dumpFileItemContent($name, false);
+		Yii::app()->end();
 	}
 	
 	/**
@@ -232,7 +237,8 @@ class CrashReportController extends Controller
 		$this->checkAuthorization($model);
 		
 		// Dump requested file item to stdout
-		$model->dumpScreenshotThumbnail($name);			
+		$model->dumpScreenshotThumbnail($name);
+		Yii::app()->end();
 	}
 	
     /**
@@ -247,7 +253,8 @@ class CrashReportController extends Controller
 		$this->checkAuthorization($model);
 				
 		// Dump requested file item to stdout
-		$model->dumpFileItemContent($name, false);			
+		$model->dumpFileItemContent($name, false);
+		Yii::app()->end();
 	}
     
 	/**
