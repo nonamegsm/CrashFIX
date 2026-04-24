@@ -195,6 +195,10 @@ class CrashReportController extends Controller
 		}
 		$maxBytes = 512 * 1024;
 		$result = $model->readFileItemTextPreview($name, $maxBytes);
+		// Do not let buffered noise / BOM (from includes) prefix the JSON; jQuery $.ajax json parse will fail.
+		if (ob_get_length()) {
+			ob_clean();
+		}
 		header('Content-Type: application/json; charset=UTF-8');
 		echo CJSON::encode(array(
 			'ok' => true,

@@ -149,29 +149,31 @@ $this->registerJs(<<<JS
         if (type === 'text') {
             $.ajax({
                 url: url,
-                dataType: 'json',
-                success: function (data) {
+                cache: false,
+                dataType: 'text',
+                success: function (raw) {
                     \$load.addClass('d-none');
-                    if (!data || !data.ok) {
-                        \$err.removeClass('d-none').text('Preview failed.');
+                    var data = null;
+                    try {
+                        var s = String(raw != null ? raw : '').replace(/^\uFEFF/, '');
+                        data = (typeof s === 'string' && /^\s*[\{\[]/.test(s)) ? JSON.parse(s) : null;
+                    } catch (e) {
+                        data = null;
+                    }
+                    if (data && data.ok) {
+                        var meta = 'Size on disk: ' + (data.size != null ? data.size + ' bytes' : 'unknown');
+                        if (data.truncated) {
+                            meta += ' — showing first ' + data.maxBytes + ' bytes only';
+                        }
+                        \$meta.removeClass('d-none').text(meta);
+                        \$pre.removeClass('d-none').text(data.content != null ? data.content : '');
                         return;
                     }
-                    var meta = 'Size on disk: ' + (data.size != null ? data.size + ' bytes' : 'unknown');
-                    if (data.truncated) {
-                        meta += ' — showing first ' + data.maxBytes + ' bytes only';
-                    }
-                    \$meta.removeClass('d-none').text(meta);
-                    \$pre.removeClass('d-none').text(data.content != null ? data.content : '');
+                    \$err.removeClass('d-none').text('Could not load preview (invalid response).');
                 },
                 error: function (xhr) {
                     \$load.addClass('d-none');
-                    var msg = 'Could not load preview.';
-                    if (xhr.responseJSON && xhr.responseJSON.message) {
-                        msg = xhr.responseJSON.message;
-                    } else if (xhr.responseText) {
-                        msg = xhr.responseText.substring(0, 200);
-                    }
-                    \$err.removeClass('d-none').text(msg);
+                    \$err.removeClass('d-none').text('Could not load preview.');
                 }
             });
             return;
