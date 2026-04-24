@@ -174,9 +174,16 @@ class Storage extends Component
         if ($zip->open($zipPath) !== true) {
             return null;
         }
-        $stream = $zip->getStream($entryName);
+        $internal = $this->findZipEntryInternalName($zip, $entryName);
+        if ($internal === null) {
+            $zip->close();
+
+            return null;
+        }
+        $stream = $zip->getStream($internal);
         if ($stream === false) {
             $zip->close();
+
             return null;
         }
 
@@ -186,7 +193,51 @@ class Storage extends Component
         fclose($out);
         fclose($stream);
         $zip->close();
+
         return $tmp;
+    }
+
+    /**
+     * Match a logical entry name to the ZIP member name (exact, then case / path normalization).
+     * CrashReport ZIPs sometimes differ from DB {@see Fileitem} filename only by case.
+     *
+     * @noinspection PhpComposerExtensionStubsInspection
+     */
+    private function findZipEntryInternalName(ZipArchive $zip, string $entryName): ?string
+    {
+        $normalize = static function (string $n): string {
+            return strtolower(str_replace('\\', '/', ltrim($n, '/')));
+        };
+        $nWantFull = $normalize($entryName);
+        $baseWant = $normalize(basename(str_replace('\\', '/', $entryName)));
+
+        $basenameMatches = [];
+
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $name = $zip->getNameIndex($i);
+            if ($name === false || substr($name, -1) === '/') {
+                continue;
+            }
+            if ($name === $entryName) {
+                return $name;
+            }
+            $nNorm = str_replace('\\', '/', $name);
+            if ($nNorm === str_replace('\\', '/', $entryName)) {
+                return $name;
+            }
+            if ($normalize($name) === $nWantFull) {
+                return $name;
+            }
+            if ($normalize(basename($nNorm)) === $baseWant) {
+                $basenameMatches[] = $name;
+            }
+        }
+
+        if (count($basenameMatches) === 1) {
+            return $basenameMatches[0];
+        }
+
+        return null;
     }
 
     /**
@@ -228,7 +279,9 @@ class Storage extends Component
 
         $info = @getimagesize($sourcePath);
         if (!$info) {
-            return false;
+            $this->mkdirRecursive(dirname($thumbPath));
+
+            return @copy($sourcePath, $thumbPath) && is_file($thumbPath);
         }
         [$srcW, $srcH, $type] = $info;
 
@@ -239,12 +292,16 @@ class Storage extends Component
             default        => null,
         };
         if ($loader === null || !function_exists($loader)) {
-            return @copy($sourcePath, $thumbPath);
+            $this->mkdirRecursive(dirname($thumbPath));
+
+            return @copy($sourcePath, $thumbPath) && is_file($thumbPath);
         }
 
         $src = $loader($sourcePath);
         if (!$src) {
-            return false;
+            $this->mkdirRecursive(dirname($thumbPath));
+
+            return @copy($sourcePath, $thumbPath) && is_file($thumbPath);
         }
 
         $scale = min(1, $this->thumbMaxEdge / max($srcW, $srcH));

@@ -199,15 +199,27 @@ class Crashreport extends \yii\db\ActiveRecord
         $thumb    = $thumbDir . DIRECTORY_SEPARATOR . basename($name);
 
         if (!is_file($thumb)) {
-            $zip = $storage->crashReportPath((int) $this->project_id, (int) $this->id);
-            $src = $storage->extractZipEntry($zip, $name);
-            if ($src === null) {
-                throw new \yii\web\NotFoundHttpException('Screenshot not found in archive.');
+            // Same on-disk cache as {@see dumpFileItemContent} so thumbnails work when
+            // the ZIP entry name differs only by case or the file was already extracted.
+            $cached = $storage->crashReportExtractDir((int) $this->project_id, (int) $this->id)
+                . DIRECTORY_SEPARATOR . basename($name);
+            $tmp = null;
+            if (is_file($cached)) {
+                $srcPath = $cached;
+            } else {
+                $zip = $storage->crashReportPath((int) $this->project_id, (int) $this->id);
+                $tmp = $storage->extractZipEntry($zip, $name);
+                if ($tmp === null) {
+                    throw new \yii\web\NotFoundHttpException('Screenshot not found in archive.');
+                }
+                $srcPath = $tmp;
             }
             try {
-                $storage->makeThumbnail($src, $thumb);
+                $storage->makeThumbnail($srcPath, $thumb);
             } finally {
-                @unlink($src);
+                if ($tmp !== null) {
+                    @unlink($tmp);
+                }
             }
         }
 

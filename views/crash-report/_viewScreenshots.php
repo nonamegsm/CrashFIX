@@ -16,8 +16,8 @@ $count = 0;
         continue;
     }
     $count++;
-    $fullUrl  = Url::to(['view-screenshot',           'name' => $fileItem->filename, 'rpt' => $model->id]);
-    $thumbUrl = Url::to(['view-screenshot-thumbnail', 'name' => $fileItem->filename, 'rpt' => $model->id]);
+    $fullUrl  = Url::to(['/crash-report/view-screenshot', 'name' => $fileItem->filename, 'rpt' => $model->id]);
+    $thumbUrl = Url::to(['/crash-report/view-screenshot-thumbnail', 'name' => $fileItem->filename, 'rpt' => $model->id]);
 ?>
     <div class="col-sm-6 col-md-4 col-lg-3">
         <div class="card h-100 shadow-sm">
