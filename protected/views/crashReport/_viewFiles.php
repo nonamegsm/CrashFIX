@@ -180,27 +180,30 @@ $previewJs = <<<'JS'
 			$.ajax({
 				url: url,
 				cache: false,
-				dataType: 'json',
-				success: function (data) {
+				dataType: 'text',
+				success: function (raw) {
 					$load.hide();
-					if (!data || !data.ok) {
-						$err.show().text('Preview failed.');
+					var data = null;
+					try {
+						var s = String(raw != null ? raw : '').replace(/^\uFEFF/, '');
+						data = (typeof s === 'string' && /^\s*[\{\[]/.test(s)) ? JSON.parse(s) : null;
+					} catch (e) {
+						data = null;
+					}
+					if (data && data.ok) {
+						var meta = 'Size on disk: ' + (data.size != null ? data.size + ' bytes' : 'unknown');
+						if (data.truncated) {
+							meta += ' — showing first ' + data.maxBytes + ' bytes only';
+						}
+						$meta.show().text(meta);
+						$pre.show().text(data.content != null ? data.content : '');
 						return;
 					}
-					var meta = 'Size on disk: ' + (data.size != null ? data.size + ' bytes' : 'unknown');
-					if (data.truncated) {
-						meta += ' — showing first ' + data.maxBytes + ' bytes only';
-					}
-					$meta.show().text(meta);
-					$pre.show().text(data.content != null ? data.content : '');
+					$err.show().text('Could not load preview (invalid response).');
 				},
 				error: function (xhr) {
 					$load.hide();
-					var msg = 'Could not load preview.';
-					if (xhr.responseText) {
-						msg = xhr.responseText.substring(0, 300);
-					}
-					$err.show().text(msg);
+					$err.show().text('Could not load preview.');
 				}
 			});
 			return false;
