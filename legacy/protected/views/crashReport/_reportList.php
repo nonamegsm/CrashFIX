@@ -1,5 +1,5 @@
 <!-- Simple Search Form -->
-<div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'inherit':'none'?>">	
+<div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
 	<?php echo CHtml::beginForm($route, 'get', array('id'=>'proj_form')); ?>
 	<div class="span-27 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
 	<div class="span-25">
@@ -12,7 +12,7 @@
 </div>
 
 <!-- Advanced Search Form -->
-<div class="span-27 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'inherit':'none'?>">	
+<div class="span-27 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'block':'none'?>">	
 	<div class="wide form" id="form_advanced_search">
 	<?php echo CHtml::beginForm($route, 'post'); ?>
 	
@@ -49,10 +49,12 @@
 		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
 			'name'=>'CrashReport[receivedFrom]',
 			'value'=>$model->receivedFrom,
+			// additional javascript options for the date picker plugin
 			'options'=>array(
 				'showAnim'=>'fold',
 			),
 			'htmlOptions'=>array(
+				//'style'=>'height:20px;'
 			),
 		  ));
 	?>
@@ -61,10 +63,12 @@
 		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
 			'name'=>'CrashReport[receivedTo]',
 			'value'=>$model->receivedTo,
+			// additional javascript options for the date picker plugin
 			'options'=>array(
 				'showAnim'=>'fold',
 			),
 			'htmlOptions'=>array(
+				//'style'=>'height:20px;'
 			),
 		  ));
 	?>	
@@ -147,15 +151,6 @@
 				                    'confirm'=>"Are you sure you want pack crash reports of the current version?(data will be packed at background mode, at the end we'll send email to you)"
 			                    )).'</li>';
                     ?>
-					<?php
-                    if(Yii::app()->user->checkAccess('pperm_manage_crash_reports', array('project_id'=>Yii::app()->user->getCurProjectId())))
-	                    echo '<li>'.CHtml::linkButton("Delete All Reports Before Current Version",
-			                    array(
-				                    'submit'=>$this->createUrl('crashReport/deleteAllBeforeVer', isset($groupid)?array('groupid'=>$groupid):array()),
-				                    'form'=>'del_form',
-				                    'confirm'=>"Are you sure you want to permanently delete all crash reports before the current version? (data will be deleted at background mode)"
-			                    )).'</li>';
-                    ?>
                 </ul>
             </li>            
         </ul>
@@ -178,7 +173,7 @@
           array(            
               'name' => 'id',
 			  'type' => 'raw',
-			  'value' => 'CHtml::link($data->id, array("crashReport/view", "id" => $data->id))',
+			  'value' => 'CHtml::link($data->id, array("crashReport/view", "id" => $data->id))',	  			  			 
 			  'cssClassExpression' => '"column-right-align"',
           ),		  
 		  array(                          			  

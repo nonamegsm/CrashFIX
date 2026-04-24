@@ -1,5 +1,5 @@
 <!-- Simple Search Form -->
-<div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'inherit':'none'?>">	
+<div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
 	<?php echo CHtml::beginForm($route, 'get', array('id'=>'proj_form')); ?>
 	<div class="span-27 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
 	<div class="span-25">
@@ -12,7 +12,7 @@
 </div>
 
 <!-- Advanced Search Form -->
-<div class="span-27 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'inherit':'none'?>">	
+<div class="span-27 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'block':'none'?>">	
 	<div class="wide form" id="form_advanced_search">
 	<?php echo CHtml::beginForm($route, 'post'); ?>
 	
