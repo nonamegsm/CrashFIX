@@ -46,12 +46,13 @@ class CrashReport extends CActiveRecord
 	 */
 	public function rules()
 	{
-		$rules = array(						
-			array('md5', 'length', 'is'=>32),	// MD5 hash should be 32 characters in length
-			array('crashguid', 'length', 'is'=>36), // Crash GUID length should be 36 characters in length			
-			array('appversion', 'length', 'min'=>1, 'max'=>32),  // Application version string should be shorter than 32 characters
-			array('description', 'length', 'max'=>256), // Problem description should not be longer than 256 characters 	
-			array('crashrptver', 'numerical', 'integerOnly'=>true, 'min'=>1000, 'max'=>9999), // CrashRpt version should be in range [1000; 9999]
+		$rules = array(					
+			// These apply when saving crash reports, not to the search form (blank search model on index / browse).
+			array('md5', 'length', 'is'=>32, 'except'=>'search'),
+			array('crashguid', 'length', 'is'=>36, 'except'=>'search'),
+			array('appversion', 'length', 'min'=>1, 'max'=>32, 'except'=>'search'),
+			array('description', 'length', 'max'=>256),
+			array('crashrptver', 'numerical', 'integerOnly'=>true, 'min'=>1000, 'max'=>9999, 'except'=>'search'),
 			// The following rules is used on search
 			array('id, received, status, md5, crashguid, appversion, ipaddress, emailfrom, description', 'safe', 'on'=>'search'),
 			array('receivedTo', 'compareFromToDates', 'on'=>'search'),
@@ -813,7 +814,7 @@ class CrashReport extends CActiveRecord
 				$criteria->compare('emailfrom', $this->emailfrom, true, 'AND');			
 			if($this->status!=-1)
 				$criteria->compare('status', $this->status, false, 'AND');			
-			if($this->receivedFrom!="" & $this->receivedTo!="")
+			if($this->receivedFrom !== '' && $this->receivedTo !== '')
 				$criteria->addBetweenCondition('received', 
 						$this->strToDate($this->receivedFrom), 
 						$this->strToDate($this->receivedTo), 'AND');						
@@ -1223,7 +1224,7 @@ class CrashReport extends CActiveRecord
 		if($dst_ratio > $src_ratio) 
 		{
 			$dst_h=$thumb_h;
-			$dst_w=$dst_h*$old_ratio;
+			$dst_w=$dst_h*$src_ratio;
 			$dst_x = $thumb_w/2-$dst_w/2;
 		}
 		else 
