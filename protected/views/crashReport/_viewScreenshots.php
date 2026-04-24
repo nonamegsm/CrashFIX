@@ -17,6 +17,7 @@
 	?>
 	<a target="_blank" href="<?php echo CHtml::encode($fullUrl); ?>">
 		<img src="<?php echo CHtml::encode($thumbUrl); ?>"
+			onerror="this.onerror=null;this.src=<?php echo json_encode($fullUrl); ?>;"
 			alt="<?php echo CHtml::encode($fileItem->filename); ?>" width="220" height="190" />
 	</a>
 	<div class="div.desc"><?php echo CHtml::link($fileItem->filename, $fullUrl); ?></div>
