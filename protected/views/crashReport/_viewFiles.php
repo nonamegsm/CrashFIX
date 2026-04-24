@@ -44,6 +44,38 @@ if (!function_exists('cf_crash_report_file_actions')) {
 		return '<span class="cf-file-actions">'.$dl.' '.$view.'</span>';
 	}
 }
+
+if (!function_exists('cf_crash_report_file_size_text')) {
+	/**
+	 * Resolve an individual ZIP member size for the Files tab.
+	 * @param string $name
+	 * @param CrashReport $reportModel
+	 * @return string
+	 */
+	function cf_crash_report_file_size_text($name, $reportModel)
+	{
+		if (!($reportModel instanceof CrashReport)) {
+			return '';
+		}
+		static $cache = array();
+		$key = $reportModel->id . '|' . $name;
+		if (isset($cache[$key])) {
+			return $cache[$key];
+		}
+		$tmp = $reportModel->extractFileItem($name);
+		if ($tmp === false || !is_file($tmp)) {
+			$cache[$key] = 'n/a';
+			return $cache[$key];
+		}
+		try {
+			$size = (int) @filesize($tmp);
+			$cache[$key] = CHtml::encode(MiscHelpers::fileSizeToStr($size));
+			return $cache[$key];
+		} finally {
+			@unlink($tmp);
+		}
+	}
+}
 ?>
 
 <style type="text/css">
@@ -84,6 +116,11 @@ span.cf-file-actions .cf-file-preview-launch { margin-left: 6px; }
 			  'type' => 'raw',
 			  'value'=>'cf_crash_report_file_name_text($data->filename)',
           ),
+		  array(
+			  'header' => 'Size',
+			  'type' => 'raw',
+			  'value' => 'cf_crash_report_file_size_text($data->filename, $model)',
+		  ),
 		  'description',
 		  array(
 			  'header' => 'Download / View',
