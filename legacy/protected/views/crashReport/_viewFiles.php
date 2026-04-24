@@ -6,20 +6,24 @@
 if (!function_exists('cf_crash_report_file_cell')) {
 	function cf_crash_report_file_cell($name, $rpt)
 	{
-		$html = CHtml::link(CHtml::encode($name), array('crashReport/extractFile', 'name' => $name, 'rpt' => $rpt));
+		$dlUrl = array('crashReport/extractFile', 'name' => $name, 'rpt' => $rpt);
 		$kind = CrashReport::previewUiKind($name);
-		if ($kind !== null) {
-			$url = $kind === 'text'
-				? Yii::app()->createUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt))
-				: Yii::app()->createUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt));
-			$html .= ' '.CHtml::button('Preview', array(
-				'type' => 'button',
-				'class' => 'cf-file-preview-btn',
-				'data-preview-type' => $kind,
-				'data-preview-url' => $url,
-				'data-preview-filename' => $name,
-			));
+		if ($kind === null) {
+			return CHtml::link(CHtml::encode($name), $dlUrl);
 		}
+		$previewUrl = $kind === 'text'
+			? Yii::app()->createUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt))
+			: Yii::app()->createUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt));
+		$previewOptions = array(
+			'class' => 'cf-file-preview-launch',
+			'title' => 'Open in page preview',
+			'data-preview-type' => $kind,
+			'data-preview-url' => $previewUrl,
+			'data-preview-filename' => $name,
+		);
+		// Primary: open AJAX overlay; avoid linking the file name to extractFile (attachment download).
+		$html = CHtml::link(CHtml::encode($name), '#', $previewOptions);
+		$html .= ' ' . CHtml::link('(download)', $dlUrl, array('class' => 'cf-file-download', 'title' => 'Download this file from the archive'));
 		return $html;
 	}
 }
@@ -91,7 +95,7 @@ if (!function_exists('cf_crash_report_file_cell')) {
 
 <div class="span-18 last">
 
-<div class="quiet">Registered file items (database). You can download each file from the archive, or use Preview for text/images:</div>
+<div class="quiet">Registered file items (database). For text and images, click the file name to preview in the page, or use (download) to save the file.</div>
 
 <?php $this->widget('zii.widgets.grid.CGridView', array(
       'dataProvider'=>$model->searchFileItems(),
@@ -161,7 +165,8 @@ $previewJs = <<<'JS'
 		}
 	});
 
-	$(document).on('click', '.cf-file-preview-btn', function () {
+	$(document).on('click', '.cf-file-preview-launch', function (e) {
+		e.preventDefault();
 		var btn = $(this);
 		var type = btn.attr('data-preview-type');
 		var url = btn.attr('data-preview-url');
