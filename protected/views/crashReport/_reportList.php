@@ -49,10 +49,12 @@
 		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
 			'name'=>'CrashReport[receivedFrom]',
 			'value'=>$model->receivedFrom,
+			// additional javascript options for the date picker plugin
 			'options'=>array(
 				'showAnim'=>'fold',
 			),
 			'htmlOptions'=>array(
+				//'style'=>'height:20px;'
 			),
 		  ));
 	?>
@@ -61,10 +63,12 @@
 		$this->widget('zii.widgets.jui.CJuiDatePicker', array(
 			'name'=>'CrashReport[receivedTo]',
 			'value'=>$model->receivedTo,
+			// additional javascript options for the date picker plugin
 			'options'=>array(
 				'showAnim'=>'fold',
 			),
 			'htmlOptions'=>array(
+				//'style'=>'height:20px;'
 			),
 		  ));
 	?>	
