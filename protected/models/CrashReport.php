@@ -1158,7 +1158,7 @@ class CrashReport extends CActiveRecord
 				$path_parts = pathinfo($itemName);
 				$ext = isset($path_parts['extension']) ? $path_parts['extension'] : '';
 				if(strcasecmp($ext,'jpg')==0 || strcasecmp($ext,'jpeg')==0)
-					$mimeType = 'image/jpeg';
+					$mimeType = 'image/jpeg'; // RFC 2046
 				else if(strcasecmp($ext,'png')==0)
 					$mimeType = 'image/png';
 				else if(strcasecmp($ext,'gif')==0)
@@ -1210,26 +1210,45 @@ class CrashReport extends CActiveRecord
 	}
 	
 	/**
-	 * This method dumps a screenshot thumbnail image to stdout or to a file.
+	 * Screenshot grid thumbnail: always JPEG. If GD is missing or decode fails, streams the original (inline) instead.
 	 * @param string $itemName File item name.
 	 */
 	public function dumpScreenshotThumbnail($itemName, $file=null)
 	{
-		// Extract file item to a temp file
+		$gdUsable = extension_loaded('gd') && (function_exists('imagecreatefromjpeg') || function_exists('imagecreatefrompng'));
+		if (!$gdUsable) {
+			$this->dumpFileItemContent($itemName, false, $file);
+			return;
+		}
+
 		$tmpfile = $this->extractFileItem($itemName);
-		if($tmpfile==False)
+		if ($tmpfile == false) {
 			throw new CHttpException(403, 'File does not exists.');
-				
-		$src_img=null;
+		}
+
 		$path_parts = pathinfo($itemName);
-		$ext = $path_parts['extension'];
-		if(strcasecmp($ext,'jpg')==0)
-			$src_img = imagecreatefromjpeg($tmpfile);
-		else if(strcasecmp($ext,'png')==0)
-			$src_img = imagecreatefrompng($tmpfile);
-		
-		if($src_img===null)
-			throw new CHttpException(403, 'Invalid file.');
+		$ext = isset($path_parts['extension']) ? $path_parts['extension'] : '';
+		$src_img = null;
+		if (strcasecmp($ext, 'jpg') == 0 || strcasecmp($ext, 'jpeg') == 0) {
+			$src_img = @imagecreatefromjpeg($tmpfile);
+		} elseif (strcasecmp($ext, 'png') == 0) {
+			$src_img = @imagecreatefrompng($tmpfile);
+		}
+
+		if (!$src_img) {
+			@unlink($tmpfile);
+			$this->dumpFileItemContent($itemName, false, $file);
+			return;
+		}
+
+		$src_w = imagesx($src_img);
+		$src_h = imagesy($src_img);
+		if ($src_w <= 0 || $src_h <= 0) {
+			imagedestroy($src_img);
+			@unlink($tmpfile);
+			$this->dumpFileItemContent($itemName, false, $file);
+			return;
+		}
 
 		$thumb_w = 220;
 		$thumb_h = 190;
@@ -1237,80 +1256,73 @@ class CrashReport extends CActiveRecord
 		$dst_h = 0;
 		$dst_x = 0;
 		$dst_y = 0;
-		$src_w=imageSX($src_img);
-		$src_h=imageSY($src_img);
-		$src_ratio = $src_w/$src_h;
-		$dst_ratio = $thumb_w/$thumb_h;
-		if($dst_ratio > $src_ratio) 
-		{
-			$dst_h=$thumb_h;
-			$dst_w=$dst_h*$src_ratio;
-			$dst_x = $thumb_w/2-$dst_w/2;
+		$src_ratio = $src_w / $src_h;
+		$dst_ratio = $thumb_w / $thumb_h;
+		if ($dst_ratio > $src_ratio) {
+			$dst_h = $thumb_h;
+			$dst_w = (int) round($dst_h * $src_ratio);
+			$dst_x = (int) round($thumb_w / 2 - $dst_w / 2);
+		} else {
+			$dst_w = $thumb_w;
+			$dst_h = (int) round($dst_w / $src_ratio);
+			$dst_y = (int) round($thumb_h / 2 - $dst_h / 2);
 		}
-		else 
-		{
-			$dst_w=$thumb_w;
-			$dst_h=$dst_w/$src_ratio;
-			$dst_y = $thumb_h/2-$dst_h/2;
+		if ($dst_w < 1) {
+			$dst_w = 1;
 		}
-		
-		$dst_img=ImageCreateTrueColor($thumb_w,$thumb_h);
-		imagecopyresampled($dst_img,$src_img,$dst_x,$dst_y,0,0,$dst_w,$dst_h,$src_w,$src_h); 
+		if ($dst_h < 1) {
+			$dst_h = 1;
+		}
 
-		imagejpeg($dst_img, $tmpfile); 
-		imagedestroy($dst_img); 
-		imagedestroy($src_img); 
-		
-		// Open out file
-		if($file!=null)
-		{
-			$fout = @fopen($file, 'w');
-			if($fout==false)
-			{
+		$dst_img = imagecreatetruecolor($thumb_w, $thumb_h);
+		$bg = imagecolorallocate($dst_img, 255, 255, 255);
+		imagefill($dst_img, 0, 0, $bg);
+		imagecopyresampled($dst_img, $src_img, $dst_x, $dst_y, 0, 0, $dst_w, $dst_h, $src_w, $src_h);
+		imagedestroy($src_img);
+
+		if (!imagejpeg($dst_img, $tmpfile, 90)) {
+			imagedestroy($dst_img);
+			@unlink($tmpfile);
+			$this->dumpFileItemContent($itemName, false, $file);
+			return;
+		}
+		imagedestroy($dst_img);
+
+		if ($file != null) {
+			$fout = @fopen($file, 'wb');
+			if ($fout == false) {
 				@unlink($tmpfile);
 				throw new CHttpException(403, 'Invalid file.');
 			}
 		}
-		
-		// Try to open file
-		if ($fd = fopen ($tmpfile, "r")) 
-		{			
-			$fsize = filesize($tmpfile);			
-			
-			$path_parts = pathinfo($itemName);
-			$ext = $path_parts['extension'];
-			if(strcasecmp($ext,'jpg')==0)
-				$mimeType = 'image/jpg';
-			else if(strcasecmp($ext,'png')==0)
-				$mimeType = 'image/png';
-			
-			// Write HTTP headers
-			header("Content-type: $mimeType");
-			header("Content-Disposition: filename=\"".$itemName."\"");
-    		header("Content-length: $fsize");
-			header("Cache-control: private"); //use this to open files directly
-						
-			// Write file content
-			while(!feof($fd)) 
-			{
-				$buffer = fread($fd, 2048);
-				
-				if($file!=null)
-					fwrite($fout, $buffer);
-				else
-					echo $buffer;
-			}
-			
-			// Close file
-			fclose($fd);
-		}	
-		else
+
+		if (!($fd = @fopen($tmpfile, 'rb'))) {
+			@unlink($tmpfile);
 			throw new CHttpException(403, 'File does not exist.');
-		
-		if($file!=null)
+		}
+		$fsize = (int) filesize($tmpfile);
+		$leaf = basename(str_replace(array("\r", "\n", '\\', '/'), '', $itemName));
+		$safeName = 'thumb-' . ($leaf !== '' ? $leaf : 'preview') . '.jpg';
+		header('Content-Type: image/jpeg');
+		header('Content-Disposition: inline; filename="' . str_replace(array('\\', '"'), array('\\\\', '\\"'), $safeName) . '"');
+		header('Content-length: ' . $fsize);
+		header('Cache-control: private');
+
+		while (!feof($fd)) {
+			$buffer = fread($fd, 8192);
+			if ($buffer === false) {
+				break;
+			}
+			if ($file != null) {
+				fwrite($fout, $buffer);
+			} else {
+				echo $buffer;
+			}
+		}
+		fclose($fd);
+		if ($file != null) {
 			fclose($fout);
-		
-		// Remove temp file
+		}
 		@unlink($tmpfile);
 	}
 	
