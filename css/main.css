@@ -421,14 +421,15 @@ div.search-form
     padding:10px;
 }
 
-/* Crash report index: simple search — avoid giant layout from Blueprint floats + % heights */
+/* Crash report index: simple search — avoid giant layout from Blueprint floats + % heights.
+   #content in column2 is span-26; inner blocks must not use span-27 (wider) or the row can overflow/clip. */
 #div_simple_search
 {
-    float: left;
-    clear: left;
+    float: none;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
+    margin-bottom: 6px;
 }
 #div_simple_search form
 {

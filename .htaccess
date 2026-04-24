@@ -1,0 +1,17 @@
+# Apache is pointed at the project root (e.g. http://127.0.0.1/greta_crashfix/), not /web.
+# Route the Yii2 front controller at web/index.php so @webroot stays correct (…/web).
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /greta_crashfix/
+
+    # Directory /greta_crashfix/ — otherwise Apache stops on the existing directory (no !-d).
+    RewriteRule ^$ web/index.php [L]
+
+    # Existing files under the repo (incl. web/assets, static files under /web/…)
+    RewriteCond %{REQUEST_FILENAME} -f
+    RewriteRule ^ - [L]
+
+    # Pretty URLs: everything else goes to the Yii2 web app
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule . web/index.php [L]
+</IfModule>

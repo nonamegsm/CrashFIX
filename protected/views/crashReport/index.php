@@ -13,7 +13,7 @@ You have no projects assigned.
 <?php else: ?>
 
 <!-- Project Selection Form -->
-<div class="span-27 last" id="div_proj_selection">	
+<div class="span-26 last" id="div_proj_selection">	
 	<?php echo CHtml::beginForm(array('site/setCurProject'), 'get', array('id'=>'proj_form')); ?>
 	<div class="span-18 last">
 		Current Project:
@@ -42,11 +42,11 @@ You have no projects assigned.
 			); 
 ?>
 
-<div class="span-27 last footnote">
-	 <?php 
-		$curVer = ""; 
-		$totalFileSize = 0; 
-		$percentOfQuota = 0; 
+<div class="span-26 last footnote">
+	<?php 
+		$curVer = "";
+		$totalFileSize = 0;
+		$percentOfQuota = 0;		
 		$count = Yii::app()->user->getCurProject()->getCrashReportCount(
 						$totalFileSize, $percentOfQuota);		
 		$totalFileSizeStr = MiscHelpers::fileSizeToStr($totalFileSize);

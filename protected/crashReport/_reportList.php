@@ -1,8 +1,8 @@
-<!-- Simple Search Form: flex row (Blueprint span-25+span-2 was stretching to viewport height in some browsers) -->
-<div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
+﻿<!-- Simple Search Form: flex row (Blueprint span-25+span-2 was stretching to viewport height in some browsers) -->
+<div class="span-26 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
 	<?php echo CHtml::beginForm($route, 'get', array('id'=>'crashSearchSimpleForm')); ?>
-	<div class="span-27 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
-	<div class="span-27 last cf-crash-search-row">
+	<div class="span-26 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
+	<div class="span-26 last cf-crash-search-row">
 		<?php echo CHtml::textField('q', isset($model->filter)?CHtml::encode($model->filter):"", array('id'=>'text_filter', 'class'=>'cf-search-field', 'autocomplete'=>'off')); ?>
 		<?php echo CHtml::submitButton('Search', array('id'=>'btn_filter')); ?>
 	</div>
@@ -10,7 +10,7 @@
 </div>
 
 <!-- Advanced Search Form -->
-<div class="span-27 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'block':'none'?>">	
+<div class="span-26 last" id="div_advanced_search" style="display:<?php echo $model->isAdvancedSearch?'block':'none'?>">	
 	<div class="wide form" id="form_advanced_search">
 	<?php echo CHtml::beginForm($route, 'post'); ?>
 	
@@ -79,13 +79,13 @@
 	</div>
 </div>
 
-<div class="span-27 last" >
+<div class="span-26 last" >
 <?php echo CHtml::beginForm(array('crashReport/deleteMultiple'), 'post', 
 		array('name'=>'del_form')); 
 ?>
 
 <!-- Actions Toolbar -->
-<div class="span-27 last">
+<div class="span-26 last">
 	<div class="div_actions">
 		<?php 
 			if(Yii::app()->user->checkAccess('pperm_manage_crash_reports', array('project_id'=>Yii::app()->user->getCurProjectId())))
@@ -149,6 +149,15 @@
 				                    'confirm'=>"Are you sure you want pack crash reports of the current version?(data will be packed at background mode, at the end we'll send email to you)"
 			                    )).'</li>';
                     ?>
+					<?php
+                    if(Yii::app()->user->checkAccess('pperm_manage_crash_reports', array('project_id'=>Yii::app()->user->getCurProjectId())))
+	                    echo '<li>'.CHtml::linkButton("Delete All Reports Before Current Version",
+			                    array(
+				                    'submit'=>$this->createUrl('crashReport/deleteAllBeforeVer', isset($groupid)?array('groupid'=>$groupid):array()),
+				                    'form'=>'del_form',
+				                    'confirm'=>"Are you sure you want to permanently delete all crash reports before the current version? (data will be deleted at background mode)"
+			                    )).'</li>';
+                    ?>
                 </ul>
             </li>            
         </ul>
@@ -158,7 +167,7 @@
 </div>
 
 <!-- Grid view -->
-<div class="span-27 last">
+<div class="span-26 last">
 <?php $this->widget('zii.widgets.grid.CGridView', array(
       'dataProvider'=>$dataProvider,
 	  'selectableRows'=>null,
@@ -171,7 +180,7 @@
           array(            
               'name' => 'id',
 			  'type' => 'raw',
-			  'value' => 'CHtml::link($data->id, array("crashReport/view", "id" => $data->id))',	  			  			 
+			  'value' => 'CHtml::link($data->id, array("crashReport/view", "id" => $data->id))',
 			  'cssClassExpression' => '"column-right-align"',
           ),		  
 		  array(                          			  
