@@ -2,9 +2,9 @@
 <div class="span-26 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
 	<?php echo CHtml::beginForm($route, 'get', array('id'=>'crashSearchSimpleForm')); ?>
 	<div class="span-26 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
-	<div class="span-26 last cf-crash-search-row">
-		<?php echo CHtml::textField('q', isset($model->filter)?CHtml::encode($model->filter):"", array('id'=>'text_filter', 'class'=>'cf-search-field', 'autocomplete'=>'off')); ?>
-		<?php echo CHtml::submitButton('Search', array('id'=>'btn_filter')); ?>
+	<div class="span-26 last cf-crash-search-row" style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;width:100%;max-width:100%;">
+		<?php echo CHtml::textField('q', isset($model->filter)?CHtml::encode($model->filter):"", array('id'=>'text_filter', 'class'=>'cf-search-field', 'autocomplete'=>'off', 'style'=>'flex:1 1 0;min-width:0;max-width:100%;height:2.2em;box-sizing:border-box;')); ?>
+		<?php echo CHtml::submitButton('Search', array('id'=>'btn_filter', 'style'=>'flex:0 0 auto;height:2.2em;min-height:2em;margin:0;')); ?>
 	</div>
 	<?php echo CHtml::endForm(); ?>
 </div>
