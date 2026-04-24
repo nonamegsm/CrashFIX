@@ -177,6 +177,10 @@ class CrashReportController extends Controller
 		if (!in_array($ext, array('jpg', 'jpeg', 'png', 'gif', 'webp'), true)) {
 			throw new CHttpException(400, 'Inline preview is only available for image types.');
 		}
+		// Clear buffered garbage (BOM, warnings) that would corrupt the binary response for <img> / XHR.
+		if (ob_get_length()) {
+			ob_clean();
+		}
 		$model->dumpFileItemContent($name, false);
 		// End immediately so no log layout / trailing output corrupts binary image data (breaks <img> preview).
 		Yii::app()->end();
