@@ -225,7 +225,9 @@ class CrashReportController extends Controller
 		
 		// Check if user is authorized to perform the action
 		$this->checkAuthorization($model);
-				
+		if (ob_get_length()) {
+			ob_clean();
+		}
 		// Dump requested file item to stdout
 		$model->dumpFileItemContent($name, false);
 		Yii::app()->end();
@@ -243,8 +245,9 @@ class CrashReportController extends Controller
 		$model = $this->loadModel($rpt);
 		// Check if user is authorized to perform the action
 		$this->checkAuthorization($model);
-		
-		// Dump requested file item to stdout
+		if (ob_get_length()) {
+			ob_clean();
+		}
 		$model->dumpScreenshotThumbnail($name);
 		Yii::app()->end();
 	}

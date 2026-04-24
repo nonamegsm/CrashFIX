@@ -3,6 +3,7 @@
 	$dataProvider = $model->searchFileItems();
 	$count = 0;
 	foreach ($dataProvider->data as $fileItem) {
+		// e.g. screenshot0.jpg, screenshot12.png
 		if (!preg_match('/^screenshot[0-9]{1,3}\.(jpe?g|png)$/i', $fileItem->filename)) {
 			continue;
 		}
