@@ -1,13 +1,11 @@
-<!-- Simple Search Form -->
+<!-- Simple Search Form: flex row (Blueprint span-25+span-2 was stretching to viewport height in some browsers) -->
 <div class="span-27 last" id="div_simple_search" style="display:<?php echo !$model->isAdvancedSearch?'block':'none'?>">	
-	<?php echo CHtml::beginForm($route, 'get', array('id'=>'proj_form')); ?>
+	<?php echo CHtml::beginForm($route, 'get', array('id'=>'crashSearchSimpleForm')); ?>
 	<div class="span-27 last"><p id="stat_filter">Search by IP Address/E-mail/Description or use <a href="#" id="link_advanced_search">advanced search</a>:</p></div>
-	<div class="span-25">
-		<?php echo CHtml::textField('q', isset($model->filter)?CHtml::encode($model->filter):"", array('id'=>'text_filter')); ?>		
-	</div>
-	<div class="span-2 last">
+	<div class="span-27 last cf-crash-search-row">
+		<?php echo CHtml::textField('q', isset($model->filter)?CHtml::encode($model->filter):"", array('id'=>'text_filter', 'class'=>'cf-search-field', 'autocomplete'=>'off')); ?>
 		<?php echo CHtml::submitButton('Search', array('id'=>'btn_filter')); ?>
-	</div>	
+	</div>
 	<?php echo CHtml::endForm(); ?>
 </div>
 
