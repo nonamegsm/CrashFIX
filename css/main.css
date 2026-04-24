@@ -372,7 +372,8 @@ div.search-form
     margin:1px;
     margin-top:8px;
     width:100%;
-    height:100%;
+    max-width:100%;
+    height:auto;
     color:#888888;
     font-size:0.9em;
 }
@@ -381,7 +382,10 @@ div.search-form
 {
     margin-top:8px;
     width:100%;
-    height:100%;
+    max-width:100%;
+    height:auto;
+    min-height:1.6em;
+    box-sizing:border-box;
     color:#888888;
     font-size:1.1em;
 }
@@ -389,7 +393,8 @@ div.search-form
 #btn_filter
 {
     color:#6e6db6;
-    height:100%;	
+    height:auto;
+    min-height:2em;
     font-size:1.1em;
 }
 
@@ -411,7 +416,10 @@ div.search-form
 {	
     margin-top:8px;
     width:100%;
-    height:100%;
+    max-width:100%;
+    height:auto;
+    min-height:1.6em;
+    box-sizing:border-box;
     color:#888888;
     font-size:1.1em;
 }
