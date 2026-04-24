@@ -189,6 +189,79 @@ class Crashreport extends \yii\db\ActiveRecord
     }
 
     /**
+     * UI hint for Files-tab AJAX preview (text vs image). Null = download only.
+     */
+    public static function previewUiKind(string $filename): ?string
+    {
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+        if (in_array($ext, ['txt', 'xml', 'log', 'json', 'csv', 'md'], true)) {
+            return 'text';
+        }
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            return 'image';
+        }
+
+        return null;
+    }
+
+    /**
+     * Read the start of a ZIP member as UTF-8 text for AJAX preview (temp extract if needed).
+     *
+     * @return array{content: string, truncated: bool, size: int}
+     */
+    public function readZipMemberTextPreview(string $name, int $maxBytes): array
+    {
+        $storage = Yii::$app->storage;
+        $cached = $storage->crashReportExtractDir((int) $this->project_id, (int) $this->id)
+            . DIRECTORY_SEPARATOR . basename($name);
+
+        $tmp = null;
+        if (is_file($cached)) {
+            $path = $cached;
+        } else {
+            $zip = $storage->crashReportPath((int) $this->project_id, (int) $this->id);
+            $tmp = $storage->extractZipEntry($zip, $name);
+            if ($tmp === null) {
+                throw new \yii\web\NotFoundHttpException('File not found in crash report archive.');
+            }
+            $path = $tmp;
+        }
+
+        try {
+            $size = (int) @filesize($path);
+            $fh = fopen($path, 'rb');
+            if ($fh === false) {
+                throw new \yii\web\ServerErrorHttpException('Could not read file.');
+            }
+            $content = stream_get_contents($fh, $maxBytes + 1);
+            fclose($fh);
+            if ($content === false) {
+                $content = '';
+            }
+            $truncated = strlen($content) > $maxBytes;
+            if ($truncated) {
+                $content = substr($content, 0, $maxBytes);
+            }
+            if ($content !== '' && !mb_check_encoding($content, 'UTF-8')) {
+                $converted = @mb_convert_encoding($content, 'UTF-8', 'Windows-1252, ISO-8859-1, UTF-8');
+                if (is_string($converted) && $converted !== '') {
+                    $content = $converted;
+                }
+            }
+
+            return [
+                'content' => $content,
+                'truncated' => $truncated,
+                'size' => $size,
+            ];
+        } finally {
+            if ($tmp !== null) {
+                @unlink($tmp);
+            }
+        }
+    }
+
+    /**
      * Build (or serve a cached) thumbnail for a screenshot inside the
      * crash report ZIP.
      */

@@ -4,8 +4,10 @@ namespace app\controllers;
 
 use Yii;
 use yii\web\Controller;
+use yii\web\Response;
 use yii\web\NotFoundHttpException;
 use yii\web\ForbiddenHttpException;
+use yii\web\BadRequestHttpException;
 use yii\filters\AccessControl;
 use yii\filters\VerbFilter;
 use yii\data\ActiveDataProvider;
@@ -36,11 +38,12 @@ class CrashReportController extends Controller
                     ],
                     [
                         'actions' => [
-                            'index', 'view', 'extract-file', 'download', 'view-screenshot', 
-                            'view-screenshot-thumbnail', 'view-video', 'upload-stat', 
-                            'version-dist', 'os-version-dist', 'geo-location-dist', 
-                            'process-again', 'reprocess-multiple', 'reprocess-all', 
-                            'delete', 'delete-multiple', 'upload-file'
+                            'index', 'view', 'extract-file', 'inline-file', 'preview-file-text',
+                            'download', 'view-screenshot',
+                            'view-screenshot-thumbnail', 'view-video', 'upload-stat',
+                            'version-dist', 'os-version-dist', 'geo-location-dist',
+                            'process-again', 'reprocess-multiple', 'reprocess-all',
+                            'delete', 'delete-multiple', 'upload-file',
                         ],
                         'allow' => true,
                         'roles' => ['@'],
@@ -115,6 +118,48 @@ class CrashReportController extends Controller
         $model = $this->findModel($rpt);
         $this->checkAuthorization($model);
         $model->dumpFileItemContent($name, true);
+    }
+
+    /**
+     * Inline stream of a ZIP member (images for modal preview; same auth as extract-file).
+     */
+    public function actionInlineFile($name, $rpt)
+    {
+        $model = $this->findModel($rpt);
+        $this->checkAuthorization($model);
+        $ext = strtolower(pathinfo((string) $name, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
+            throw new BadRequestHttpException('Inline preview is only available for image types.');
+        }
+        $model->dumpFileItemContent($name, false);
+    }
+
+    /**
+     * JSON: first chunk of a text-like ZIP member for modal preview.
+     */
+    public function actionPreviewFileText($name, $rpt)
+    {
+        Yii::$app->response->format = Response::FORMAT_JSON;
+
+        $model = $this->findModel($rpt);
+        $this->checkAuthorization($model);
+
+        $ext = strtolower(pathinfo((string) $name, PATHINFO_EXTENSION));
+        if (!in_array($ext, ['txt', 'xml', 'log', 'json', 'csv', 'md'], true)) {
+            throw new BadRequestHttpException('Text preview is not enabled for this file type.');
+        }
+
+        $maxBytes = 512 * 1024;
+        $result = $model->readZipMemberTextPreview($name, $maxBytes);
+
+        return [
+            'ok' => true,
+            'filename' => basename((string) $name),
+            'truncated' => $result['truncated'],
+            'size' => $result['size'],
+            'maxBytes' => $maxBytes,
+            'content' => $result['content'],
+        ];
     }
 
     public function actionViewScreenshot($name, $rpt)
