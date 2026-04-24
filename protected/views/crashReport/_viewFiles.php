@@ -49,17 +49,27 @@ if (!function_exists('cf_crash_report_file_size_text')) {
 	/**
 	 * Resolve an individual ZIP member size for the Files tab.
 	 * @param string $name
-	 * @param CrashReport $reportModel
+	 * @param int $reportId
 	 * @return string
 	 */
-	function cf_crash_report_file_size_text($name, $reportModel)
+	function cf_crash_report_file_size_text($name, $reportId)
 	{
-		if (!($reportModel instanceof CrashReport)) {
+		$reportId = (int) $reportId;
+		if ($reportId <= 0) {
 			return '';
 		}
 		static $cache = array();
-		$key = $reportModel->id . '|' . $name;
+		static $models = array();
+		$key = $reportId . '|' . $name;
 		if (isset($cache[$key])) {
+			return $cache[$key];
+		}
+		if (!array_key_exists($reportId, $models)) {
+			$models[$reportId] = CrashReport::model()->findByPk($reportId);
+		}
+		$reportModel = $models[$reportId];
+		if (!($reportModel instanceof CrashReport)) {
+			$cache[$key] = 'n/a';
 			return $cache[$key];
 		}
 		$tmp = $reportModel->extractFileItem($name);
@@ -119,7 +129,7 @@ span.cf-file-actions .cf-file-preview-launch { margin-left: 6px; }
 		  array(
 			  'header' => 'Size',
 			  'type' => 'raw',
-			  'value' => 'cf_crash_report_file_size_text($data->filename, $model)',
+			  'value' => 'cf_crash_report_file_size_text($data->filename, $data->crashreport_id)',
 		  ),
 		  'description',
 		  array(
