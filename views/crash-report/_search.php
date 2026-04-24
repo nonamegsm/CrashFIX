@@ -40,6 +40,16 @@ $statusItems = ['' => 'Any status'] + Lookup::items('CrashReportStatus');
         </div>
 
         <div class="row">
+            <div class="col-md-8">
+                <?= $form->field($model, 'attachmentFilename')->textInput([
+                    'maxlength' => true,
+                    'class' => 'form-control form-control-sm',
+                    'placeholder' => 'e.g. .mbn, *boot*, *.xml',
+                ])->hint('Matches names stored for this report in the database after processing (Files tab). Use <code>*</code> as wildcard; otherwise partial substring match. Does not scan ZIPs that were never indexed.') ?>
+            </div>
+        </div>
+
+        <div class="row">
             <div class="col-md-4">
                 <?= $form->field($model, 'srcfilename')->textInput(['maxlength' => true, 'class' => 'form-control form-control-sm']) ?>
             </div>

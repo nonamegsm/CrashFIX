@@ -4,6 +4,8 @@ namespace app\models;
 
 use yii\base\Model;
 use yii\data\ActiveDataProvider;
+use yii\db\Expression;
+use yii\db\Query;
 
 /**
  * Search model for the Crash Reports index page.
@@ -14,14 +16,49 @@ use yii\data\ActiveDataProvider;
  */
 class CrashreportSearch extends Crashreport
 {
+    /**
+     * Filter to reports whose indexed {@see Fileitem} rows match this pattern.
+     * Glob: `*` → `%`, `?` → `_`. Otherwise substring match. Empty = ignore.
+     *
+     * @var string|null
+     */
+    public $attachmentFilename;
+
     public function rules()
     {
         return [
             [['id', 'status', 'groupid', 'project_id', 'appversion_id', 'filesize'], 'integer'],
             [['srcfilename', 'crashguid', 'ipaddress', 'md5', 'emailfrom', 'description',
               'exception_type', 'exceptionmodule', 'exe_image', 'os_name_reg', 'os_ver_mdmp',
-              'product_type', 'cpu_architecture', 'geo_location'], 'safe'],
+              'product_type', 'cpu_architecture', 'geo_location', 'attachmentFilename'], 'safe'],
+            [['attachmentFilename'], 'string', 'max' => 512],
         ];
+    }
+
+    public function attributeLabels()
+    {
+        return array_merge(parent::attributeLabels(), [
+            'attachmentFilename' => 'Contains file in report (name)',
+        ]);
+    }
+
+    /**
+     * Build SQL LIKE pattern for {@see $attachmentFilename}.
+     */
+    public static function buildAttachmentFilenameLike(string $raw): ?string
+    {
+        $raw = trim($raw);
+        if ($raw === '') {
+            return null;
+        }
+        if (strpbrk($raw, '*?') !== false) {
+            $p = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $raw);
+
+            return str_replace(['*', '?'], ['%', '_'], $p);
+        }
+        $p = str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $raw);
+
+        return '%' . $p . '%';
     }
 
     /**
@@ -81,6 +118,18 @@ class CrashreportSearch extends Crashreport
               ->andFilterWhere(['like', 'product_type',      $this->product_type])
               ->andFilterWhere(['like', 'cpu_architecture',  $this->cpu_architecture])
               ->andFilterWhere(['like', 'geo_location',      $this->geo_location]);
+
+        $attachLike = self::buildAttachmentFilenameLike((string) $this->attachmentFilename);
+        if ($attachLike !== null) {
+            $cr = Crashreport::tableName();
+            $fi = Fileitem::tableName();
+            $exists = (new Query())
+                ->select(new Expression('1'))
+                ->from($fi)
+                ->where("$fi.[[crashreport_id]] = $cr.[[id]]")
+                ->andWhere(['like', "$fi.[[filename]]", $attachLike, false]);
+            $query->andWhere(['exists', $exists]);
+        }
 
         return $dataProvider;
     }
