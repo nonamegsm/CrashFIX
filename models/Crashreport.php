@@ -366,6 +366,53 @@ class Crashreport extends \yii\db\ActiveRecord
         ]);
     }
 
+    /**
+     * ZIP central-directory listing (metadata only): member paths and uncompressed sizes.
+     * Uses {@see \app\components\Storage::listZipEntries}; does not extract file bodies.
+     *
+     * @return array<int, array{path: string, size: int, is_dir: bool}>
+     */
+    public function listZipCentralDirectoryMembers(): array
+    {
+        if (!Yii::$app->has('storage')) {
+            return [];
+        }
+        $storage = Yii::$app->storage;
+        $zipPath = $storage->crashReportPath((int) $this->project_id, (int) $this->id);
+        $raw = $storage->listZipEntries($zipPath);
+        if ($raw === []) {
+            return [];
+        }
+
+        $rows = [];
+        foreach ($raw as $name => $size) {
+            $isDir = is_string($name) && substr($name, -1) === '/';
+            $rows[] = [
+                'path' => (string) $name,
+                'size' => (int) $size,
+                'is_dir' => $isDir,
+            ];
+        }
+        usort($rows, static function (array $a, array $b): int {
+            return strcmp($a['path'], $b['path']);
+        });
+
+        return $rows;
+    }
+
+    /**
+     * @return bool Whether the crash-report archive exists on disk for {@see listZipCentralDirectoryMembers}.
+     */
+    public function isZipArchiveOnDisk(): bool
+    {
+        if (!Yii::$app->has('storage')) {
+            return false;
+        }
+        $path = Yii::$app->storage->crashReportPath((int) $this->project_id, (int) $this->id);
+
+        return is_file($path);
+    }
+
     public function searchFileItems(): \yii\data\ActiveDataProvider
     {
         return new \yii\data\ActiveDataProvider([

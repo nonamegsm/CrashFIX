@@ -299,6 +299,39 @@ class CrashReport extends CActiveRecord
 		$fileName = $dirName."/".$this->md5.'.zip';
 		return $fileName;
 	}
+
+	/**
+	 * ZIP central-directory listing only (member paths + uncompressed sizes; no extraction).
+	 * @return array[] each row: path, size, is_dir
+	 */
+	public function listZipCentralDirectoryMembers()
+	{
+		$path = $this->getLocalFilePath();
+		if ($path === false || !is_file($path)) {
+			return array();
+		}
+		$zip = new ZipArchive();
+		if ($zip->open($path) !== true) {
+			return array();
+		}
+		$rows = array();
+		for ($i = 0; $i < $zip->numFiles; $i++) {
+			$stat = $zip->statIndex($i);
+			if ($stat) {
+				$name = $stat['name'];
+				$rows[] = array(
+					'path' => $name,
+					'size' => isset($stat['size']) ? (int)$stat['size'] : 0,
+					'is_dir' => (substr($name, -1) === '/'),
+				);
+			}
+		}
+		$zip->close();
+		usort($rows, function ($a, $b) {
+			return strcmp($a['path'], $b['path']);
+		});
+		return $rows;
+	}
 	
 	/**
 	 * This method looks for an existing crash group for the given crash report
