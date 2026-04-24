@@ -40,7 +40,7 @@ if (!function_exists('cf_crash_report_file_actions')) {
 	}
 }
 ?>
-
+<!-- crashfix-renderer:files-v2 (if this comment is missing in View Source, the server is not using this _viewFiles.php) -->
 <style type="text/css">
 #cf-file-preview-overlay { display:none; position:fixed; left:0; top:0; right:0; bottom:0; background:rgba(0,0,0,.45); z-index:10000; overflow:auto; }
 #cf-file-preview-inner { margin:24px auto; max-width:920px; background:#fff; border:1px solid #999; padding:12px 40px 12px 12px; position:relative; }
