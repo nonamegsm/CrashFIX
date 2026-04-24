@@ -3,28 +3,40 @@
  * @var CrashReportController $this
  * @var CrashReport $model
  */
-if (!function_exists('cf_crash_report_file_cell')) {
-	function cf_crash_report_file_cell($name, $rpt)
+if (!function_exists('cf_crash_report_file_name_text')) {
+	/** @return string Plain file name (no link; download is a separate action). */
+	function cf_crash_report_file_name_text($name)
+	{
+		return CHtml::encode($name);
+	}
+}
+
+if (!function_exists('cf_crash_report_file_actions')) {
+	/**
+	 * Download (always) + View (in-page preview when supported: text, images).
+	 * @return string
+	 */
+	function cf_crash_report_file_actions($name, $rpt)
 	{
 		$dlUrl = array('crashReport/extractFile', 'name' => $name, 'rpt' => $rpt);
+		$dl = CHtml::link('Download', $dlUrl, array('class' => 'cf-file-download', 'title' => 'Download this file from the archive'));
 		$kind = CrashReport::previewUiKind($name);
 		if ($kind === null) {
-			return CHtml::link(CHtml::encode($name), $dlUrl);
+			$view = ' <span class="cf-file-view-na" style="color:#999;margin-left:8px" title="No in-browser preview for this file type. Use Download.">View</span>';
+			return '<span class="cf-file-actions">'.$dl.$view.'</span>';
 		}
 		$previewUrl = $kind === 'text'
 			? Yii::app()->createUrl('crashReport/previewFileText', array('name' => $name, 'rpt' => $rpt))
 			: Yii::app()->createUrl('crashReport/inlineFile', array('name' => $name, 'rpt' => $rpt));
-		$previewOptions = array(
+		$view = CHtml::htmlButton('View', array(
+			'type' => 'button',
 			'class' => 'cf-file-preview-launch',
-			'title' => 'Open in page preview',
+			'title' => 'View in this page (text or image only)',
 			'data-preview-type' => $kind,
 			'data-preview-url' => $previewUrl,
 			'data-preview-filename' => $name,
-		);
-		// Primary: open AJAX overlay; avoid linking the file name to extractFile (attachment download).
-		$html = CHtml::link(CHtml::encode($name), '#', $previewOptions);
-		$html .= ' ' . CHtml::link('(download)', $dlUrl, array('class' => 'cf-file-download', 'title' => 'Download this file from the archive'));
-		return $html;
+		));
+		return '<span class="cf-file-actions">'.$dl.' '.$view.'</span>';
 	}
 }
 ?>
@@ -39,6 +51,8 @@ if (!function_exists('cf_crash_report_file_cell')) {
 #cf-file-preview-error { color:#a00; margin-bottom:8px; }
 #cf-file-preview-pre { max-height:70vh; overflow:auto; white-space:pre-wrap; word-break:break-word; font-size:13px; background:#f5f5f5; border:1px solid #ddd; padding:8px; margin:0; }
 #cf-file-preview-image { max-width:100%; max-height:75vh; }
+span.cf-file-actions a.cf-file-download { font-weight: normal; }
+span.cf-file-actions .cf-file-preview-launch { margin-left: 6px; }
 </style>
 
 <div class="span-18 last">
@@ -70,6 +84,7 @@ if (!function_exists('cf_crash_report_file_cell')) {
 				<tr>
 					<th>Member path</th>
 					<th>Uncompressed size</th>
+					<th>Actions</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -80,11 +95,12 @@ if (!function_exists('cf_crash_report_file_cell')) {
 						if (!empty($row['is_dir'])) {
 							echo CHtml::encode($row['path']);
 						} else {
-							echo cf_crash_report_file_cell($row['path'], $model->id);
+							echo cf_crash_report_file_name_text($row['path']);
 						}
 						?>
 					</td>
 					<td><?php echo !empty($row['is_dir']) ? '—' : CHtml::encode(MiscHelpers::fileSizeToStr($row['size'])); ?></td>
+					<td><?php echo !empty($row['is_dir']) ? '—' : cf_crash_report_file_actions($row['path'], (int) $model->id); ?></td>
 				</tr>
 			<?php endforeach; ?>
 			</tbody>
@@ -95,18 +111,23 @@ if (!function_exists('cf_crash_report_file_cell')) {
 
 <div class="span-18 last">
 
-<div class="quiet">Registered file items (database). For text and images, click the file name to preview in the page, or use (download) to save the file.</div>
+<div class="quiet" style="margin-bottom:8px">You can also download individual files contained in this crash report archive:</div>
 
 <?php $this->widget('zii.widgets.grid.CGridView', array(
       'dataProvider'=>$model->searchFileItems(),
 	  'selectableRows'=>null,
       'columns'=>array(
-		  array(            
+		  array(
               'name' => 'filename',
 			  'type' => 'raw',
-			  'value'=>'cf_crash_report_file_cell($data->filename, $data->crashreport_id)',
+			  'value'=>'cf_crash_report_file_name_text($data->filename)',
           ),
-		  'description'
+		  'description',
+		  array(
+			  'header' => 'Download / View',
+			  'type' => 'raw',
+			  'value' => 'cf_crash_report_file_actions($data->filename, $data->crashreport_id)',
+		  ),
       ),
   )); ?>
 
@@ -167,10 +188,18 @@ $previewJs = <<<'JS'
 
 	$(document).on('click', '.cf-file-preview-launch', function (e) {
 		e.preventDefault();
+		e.stopPropagation();
 		var btn = $(this);
-		var type = btn.attr('data-preview-type');
-		var url = btn.attr('data-preview-url');
-		var fname = btn.attr('data-preview-filename') || 'File';
+		var type = String(btn.attr('data-preview-type') || '');
+		var url = String(btn.attr('data-preview-url') || '');
+		var fname = String(btn.attr('data-preview-filename') || 'File');
+		if (!url || (type !== 'text' && type !== 'image')) {
+			reset();
+			$ov.show();
+			$title.text('Preview: ' + fname);
+			$err.show().text('Preview is not available. Please check that the page finished loading and try again.');
+			return false;
+		}
 		showOverlay();
 		$title.text('Preview: ' + fname);
 
@@ -181,13 +210,14 @@ $previewJs = <<<'JS'
 			});
 			$img.attr('src', url).attr('alt', fname);
 			$imgW.show();
-			return;
+			return false;
 		}
 
 		if (type === 'text') {
 			$load.show();
 			$.ajax({
 				url: url,
+				cache: false,
 				dataType: 'json',
 				success: function (data) {
 					$load.hide();
@@ -211,10 +241,11 @@ $previewJs = <<<'JS'
 					$err.show().text(msg);
 				}
 			});
-			return;
+			return false;
 		}
 
 		$err.show().text('Unknown preview type.');
+		return false;
 	});
 })(jQuery);
 JS;
