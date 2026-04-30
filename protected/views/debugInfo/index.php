@@ -108,7 +108,7 @@ You have no projects assigned.
 </div>
 
 <div class="span-27 last" >
-<?php echo CHtml::beginForm(array('debugInfo/deleteMultiple'), 'post', array('name'=>'del_form')); ?>
+<?php echo CHtml::beginForm(array('debugInfo/deleteMultiple'), 'post', array('name'=>'del_form', 'id'=>'del_form')); ?>
 
 <!-- Actions Toolbar -->
 <div class="span-27 last">
@@ -214,26 +214,17 @@ You have no projects assigned.
 </div>
 
  <?php 
- $script = <<<SCRIPT
-$(":checkbox").live('click', function(e)
-{	
-	var totalSelected = 0;
-	$("input[name='DeleteRows\[\]']").each(function() {if($(this).attr('checked')) totalSelected++;});
-	
-	if(totalSelected==0)
-	{
-		$("#delete_selected").css('visibility', 'hidden');
-		$("#reprocess_selected").css('visibility', 'hidden');
-	}
-	else
-	{
-		$("#delete_selected").css('visibility', 'visible');
-		$("#reprocess_selected").css('visibility', 'visible');
-	}
-	
-});
+ $script = <<<'SCRIPT'
+function refreshDebugInfoBulkActions()
+{
+	var n = $("#del_form input[name='DeleteRows[]']:checked").length;
+	var vis = n > 0 ? "visible" : "hidden";
+	$("#delete_selected").css("visibility", vis);
+	$("#reprocess_selected").css("visibility", vis);
+}
 
-$("#delete_selected, #reprocess_selected").css('visibility', 'hidden');
+$("#del_form").on("change", "input[name='DeleteRows[]']", refreshDebugInfoBulkActions);
+refreshDebugInfoBulkActions();
 
 $("#proj, #ver").bind('change', function(e)
 {	
