@@ -372,6 +372,7 @@ class PollCommand extends CConsoleCommand
 		$cont  = isset($elemSummary->Container)    ? (string)$elemSummary->Container    : '';
 		$arch  = isset($elemSummary->Architecture) ? (string)$elemSummary->Architecture : '';
 		$kind  = isset($elemSummary->BuildIdKind)  ? (string)$elemSummary->BuildIdKind  : '';
+		$lines = isset($elemSummary->HasSourceLines) ? (string)$elemSummary->HasSourceLines : '';
 
 		// PDB-positive default: when the existing GUID/Age path ran
 		// successfully but a pre-1.0.6 daemon didn't write Format,
@@ -384,9 +385,7 @@ class PollCommand extends CConsoleCommand
 		$debugInfo->container     = $cont!== '' ? $cont : null;
 		$debugInfo->architecture  = $arch!== '' ? $arch : null;
 		$debugInfo->build_id_kind = $kind!== '' ? $kind : null;
-
-		// has_source_lines stays NULL until phase 1.1 which actually
-		// walks .debug_line.
+		$debugInfo->has_source_lines = $lines !== '' ? (int)$lines : null;
 	}
 
 	/**
@@ -414,7 +413,7 @@ class PollCommand extends CConsoleCommand
 		// might reject empty md5 etc.
 		try {
 			$debugInfo->save(false, array(
-				'format', 'container', 'architecture', 'build_id_kind'));
+				'format', 'container', 'architecture', 'build_id_kind', 'has_source_lines'));
 		} catch(Exception $e) {
 			Yii::log('updateDebugInfoMetadataFromXml: save failed: '.$e->getMessage(), 'warning');
 		}

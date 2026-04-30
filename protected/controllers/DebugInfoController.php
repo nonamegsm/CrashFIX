@@ -45,6 +45,7 @@ class DebugInfoController extends Controller
 					'uploadStat',
 					'delete', 
 					'deleteMultiple', 
+					'reprocessMultiple',
 					'uploadFile'
 				),
 				'users'=>array('@'),
@@ -183,6 +184,34 @@ class DebugInfoController extends Controller
 		// Redirect to index
 		$this->redirect(array('debugInfo/index', ));
 	}
+
+	/**
+	 * This action queues selected debug info files for daemon reprocessing.
+	 */
+	public function actionReprocessMultiple()
+	{
+		if(!isset($_POST['DeleteRows']))
+		{
+			throw new CHttpException(404, 'The parameter is invalid');
+		}
+
+		$reprocessRows = $_POST['DeleteRows'];
+
+		foreach($reprocessRows as $id)
+		{
+			$model = $this->loadModel($id);
+
+			// Check if user is authorized to perform this action
+			$this->checkAuthorization($model, 'pperm_manage_debug_info');
+
+			if(!$model->markForReprocessing())
+			{
+				throw new CHttpException(404, 'The specified record could not be queued for reprocessing.');
+			}
+		}
+
+		$this->redirect(array('debugInfo/index', ));
+	}
 	
 	/**
 	 *  This action generates an image with debug info upload statistics
@@ -197,6 +226,43 @@ class DebugInfoController extends Controller
 	}
 			
 	/**
+	 * Converts PHP shorthand sizes like "128M" to bytes.
+	 */
+	private function phpSizeToBytes($value)
+	{
+		$value = trim((string)$value);
+		if($value === '')
+			return 0;
+
+		$unit = strtolower($value[strlen($value)-1]);
+		$number = (float)$value;
+
+		switch($unit)
+		{
+			case 'g': $number *= 1024;
+			case 'm': $number *= 1024;
+			case 'k': $number *= 1024;
+		}
+
+		return (int)$number;
+	}
+
+	/**
+	 * Human-readable byte size for upload-limit messages.
+	 */
+	private function formatBytes($bytes)
+	{
+		$bytes = (int)$bytes;
+		if($bytes >= 1024*1024*1024)
+			return round($bytes/(1024*1024*1024), 1).' GB';
+		if($bytes >= 1024*1024)
+			return round($bytes/(1024*1024), 1).' MB';
+		if($bytes >= 1024)
+			return round($bytes/1024, 1).' KB';
+		return $bytes.' bytes';
+	}
+
+	/**
 	 * This is the 'uploadFile' action that is invoked
 	 * when a user wants to upload one or several PDB files using web GUI.	 
 	 */	
@@ -207,6 +273,14 @@ class DebugInfoController extends Controller
 		
 		$model = new DebugInfo('create');
 		$submitted = false;
+		$postMaxBytes = $this->phpSizeToBytes(ini_get('post_max_size'));
+		$uploadMaxBytes = $this->phpSizeToBytes(ini_get('upload_max_filesize'));
+		$effectiveUploadLimit = min(
+			$postMaxBytes > 0 ? $postMaxBytes : PHP_INT_MAX,
+			$uploadMaxBytes > 0 ? $uploadMaxBytes : PHP_INT_MAX
+		);
+		if($effectiveUploadLimit === PHP_INT_MAX)
+			$effectiveUploadLimit = 0;
 		
 		if(isset($_POST['DebugInfo']))
 		{			
@@ -227,12 +301,37 @@ class DebugInfoController extends Controller
 				
 			}
 		}
+		else if(Yii::app()->request->isPostRequest)
+		{
+			$submitted = true;
+			$contentLength = isset($_SERVER['CONTENT_LENGTH']) ? (int)$_SERVER['CONTENT_LENGTH'] : 0;
+			if($contentLength > 0 && $postMaxBytes > 0 && $contentLength > $postMaxBytes)
+			{
+				$model->addError(
+					'fileAttachment',
+					'Upload was rejected before CrashFix could save it. The request was '.
+					$this->formatBytes($contentLength).', but PHP post_max_size is '.
+					$this->formatBytes($postMaxBytes).'. Increase post_max_size and upload_max_filesize in php.ini.'
+				);
+			}
+			else
+			{
+				$model->addError(
+					'fileAttachment',
+					'Upload did not contain a debug-info file. Check PHP upload limits and try again.'
+				);
+			}
+		}
 				
 		// Display the result
 		$this->render('uploadFile', 
 					array(
 						'model'=>$model,
 						'submitted'=>$submitted,
+						'uploadLimitBytes'=>$effectiveUploadLimit,
+						'uploadLimitLabel'=>$this->formatBytes($effectiveUploadLimit),
+						'postMaxLabel'=>$this->formatBytes($postMaxBytes),
+						'uploadMaxLabel'=>$this->formatBytes($uploadMaxBytes),
 					)
 				);					
 	}

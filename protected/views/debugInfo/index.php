@@ -120,9 +120,20 @@ You have no projects assigned.
 					array(
 						'id'=>'delete_selected', 
 						'form'=>'del_form',
+						'submit'=>array('debugInfo/deleteMultiple'),
 						'confirm'=>"Are you sure you want to permanently delete selected debug info file(s)?"
 					)); 
-		?>		
+		?>
+
+		<?php
+			echo CHtml::linkButton("Reprocess Selected",
+					array(
+						'id'=>'reprocess_selected',
+						'form'=>'del_form',
+						'submit'=>array('debugInfo/reprocessMultiple'),
+						'confirm'=>"Queue selected debug info file(s) for daemon reprocessing?"
+					));
+		?>
 	</div>	
 </div>
 
@@ -210,11 +221,19 @@ $(":checkbox").live('click', function(e)
 	$("input[name='DeleteRows\[\]']").each(function() {if($(this).attr('checked')) totalSelected++;});
 	
 	if(totalSelected==0)
+	{
 		$("#delete_selected").css('visibility', 'hidden');
+		$("#reprocess_selected").css('visibility', 'hidden');
+	}
 	else
+	{
 		$("#delete_selected").css('visibility', 'visible');
+		$("#reprocess_selected").css('visibility', 'visible');
+	}
 	
 });
+
+$("#delete_selected, #reprocess_selected").css('visibility', 'hidden');
 
 $("#proj, #ver").bind('change', function(e)
 {	

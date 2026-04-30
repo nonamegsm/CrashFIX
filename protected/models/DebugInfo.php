@@ -401,6 +401,67 @@ class DebugInfo extends CActiveRecord
         $this->status = self::STATUS_PENDING_DELETE;
         return $this->save();        
     }
+
+	/**
+	 * Marks this record for daemon reprocessing.
+	 */
+	public function markForReprocessing()
+	{
+		if($this->status==self::STATUS_PENDING_PROCESSING ||
+			$this->status==self::STATUS_PROCESSING_IN_PROGRESS ||
+			$this->status==self::STATUS_PENDING_DELETE ||
+			$this->status==self::STATUS_DELETE_IN_PROGRESS)
+		{
+			$this->addError('status', 'Debug info file is already queued, processing, or deleting.');
+			return false;
+		}
+
+		$runtimeFileName = Yii::app()->getBasePath()."/runtime/debugInfo/".$this->filename."/".$this->guid."/".$this->filename;
+		$currentFileName = $this->getLocalFilePath();
+		$sourceFileName = null;
+
+		if(is_file($currentFileName))
+			$sourceFileName = $currentFileName;
+		else if(is_file($runtimeFileName))
+			$sourceFileName = $runtimeFileName;
+
+		if($sourceFileName===null)
+		{
+			$this->addError('filename', 'Debug info file is missing from local storage.');
+			return false;
+		}
+
+		$runtimeDirName = dirname($runtimeFileName);
+		if(!is_dir($runtimeDirName) && !mkdir($runtimeDirName, 0777, true))
+		{
+			$this->addError('filename', 'Could not create runtime debug info directory.');
+			return false;
+		}
+
+		if($sourceFileName!==$runtimeFileName && !copy($sourceFileName, $runtimeFileName))
+		{
+			$this->addError('filename', 'Could not stage debug info file for reprocessing.');
+			return false;
+		}
+
+		foreach($this->getProcessingErrors() as $processingError)
+			$processingError->delete();
+
+		$this->status = self::STATUS_PENDING_PROCESSING;
+		$this->format = null;
+		$this->container = null;
+		$this->architecture = null;
+		$this->has_source_lines = null;
+		$this->build_id_kind = null;
+
+		return $this->save(false, array(
+			'status',
+			'format',
+			'container',
+			'architecture',
+			'has_source_lines',
+			'build_id_kind'));
+	}
     
 	/**
 	 *   This method is called before deleting AR model from database table.

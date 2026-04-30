@@ -64,6 +64,9 @@ $this->breadcrumbs=array(
 			Supported formats: PDB, DWARF in ELF (.so / .debug),
 			DWARF in PE (.exe / .dll), stripped .debug companion files.
 			Format detection runs server-side after upload.
+			Current PHP upload limit: <?php echo CHtml::encode($uploadLimitLabel); ?>
+			(post_max_size <?php echo CHtml::encode($postMaxLabel); ?>,
+			upload_max_filesize <?php echo CHtml::encode($uploadMaxLabel); ?>).
 		</p>
 	</div>
 
@@ -88,6 +91,13 @@ $this->breadcrumbs=array(
 </div>
 
 <?php
+$uploadLimitBytes = isset($uploadLimitBytes) ? (int)$uploadLimitBytes : 0;
+$uploadLimitLabel = isset($uploadLimitLabel) ? $uploadLimitLabel : 'unknown';
+$uploadLimitJson = CJSON::encode(array(
+	'bytes'=>$uploadLimitBytes,
+	'label'=>$uploadLimitLabel,
+));
+
 $script = <<<SCRIPT
 $("#proj, #ver").bind("change", function(e)
 {
@@ -105,6 +115,7 @@ $("#proj, #ver").bind("change", function(e)
 	var detailText = document.getElementById("debug-info-upload-detail");
 	var fileInput = document.getElementById("DebugInfo_fileAttachment");
 	var submitButton = $(form).find(":submit").first();
+	var uploadLimit = $uploadLimitJson;
 
 	function formatBytes(bytes) {
 		if(!bytes || bytes < 0)
@@ -125,6 +136,18 @@ $("#proj, #ver").bind("change", function(e)
 		var fileName = fileInput && fileInput.value ? fileInput.value.replace(/^.*[\\\\\\/]/, "") : "";
 		if(!fileName)
 			return true;
+
+		if(uploadLimit.bytes > 0 && fileInput.files && fileInput.files.length &&
+			fileInput.files[0].size > uploadLimit.bytes) {
+			progressBox.style.display = "block";
+			progressBar.style.width = "0%";
+			statusText.textContent = "Selected file is too large for this server.";
+			detailText.textContent = fileName + " is " + formatBytes(fileInput.files[0].size) +
+				", but the current PHP upload limit is " + uploadLimit.label +
+				". Increase post_max_size and upload_max_filesize in php.ini.";
+			submitButton.prop("disabled", false).val("Upload");
+			return false;
+		}
 
 		progressBox.style.display = "block";
 		progressBar.style.width = "0%";
