@@ -7,7 +7,7 @@
 function getCommonParams()
 {
     return array(
-        'version'=>'1.0.9', // CrashFix web app version       
+        'version'=>'1.0.10', // CrashFix web app version       
     );
     
 }
