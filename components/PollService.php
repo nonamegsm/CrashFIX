@@ -187,6 +187,7 @@ class PollService
         Yii::info($crashReportFiles === [] ? 'There are no crash report files ready for processing'
             : ('Found ' . count($crashReportFiles) . ' crash report file(s) ready for processing'), 'poll');
 
+        $symDir = Yii::$app->storage->getBaseDir() . DIRECTORY_SEPARATOR . 'debugInfo';
         foreach ($crashReportFiles as $crashReport) {
             $fileName = $crashReport->getLocalFilePath();
             if ($fileName === null || !is_file($fileName)) {
@@ -197,7 +198,10 @@ class PollService
             if ($outFile === false) {
                 continue;
             }
-            $command = 'assync dumper --dump-crash-report "' . $fileName . '" "' . $outFile . '"';
+            $command = 'assync dumper --dump-crash-report "'
+                . str_replace('"', '\\"', $fileName) . '" "'
+                . str_replace('"', '\\"', $outFile) . '" "'
+                . str_replace('"', '\\"', $symDir) . '"';
             $project = $crashReport->project;
             if ($project !== null && !(bool) $project->require_exact_build_age) {
                 $command .= ' --relax-build-age';
