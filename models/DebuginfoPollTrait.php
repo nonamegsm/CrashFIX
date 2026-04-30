@@ -82,7 +82,7 @@ trait DebuginfoPollTrait
         }
         static::applyDetectorMetadataFromSummary($doc->Summary, $debugInfo);
         try {
-            $debugInfo->save(false, ['format', 'container', 'architecture', 'build_id_kind']);
+            $debugInfo->save(false, ['format', 'container', 'architecture', 'build_id_kind', 'has_source_lines']);
         } catch (\Throwable $e) {
             Yii::warning('updateMetadataFromDaemonXmlFile: save failed: ' . $e->getMessage(), 'poll');
         }
@@ -94,6 +94,7 @@ trait DebuginfoPollTrait
         $cont = isset($elemSummary->Container) ? (string) $elemSummary->Container : '';
         $arch = isset($elemSummary->Architecture) ? (string) $elemSummary->Architecture : '';
         $kind = isset($elemSummary->BuildIdKind) ? (string) $elemSummary->BuildIdKind : '';
+        $lines = isset($elemSummary->HasSourceLines) ? (string) $elemSummary->HasSourceLines : '';
 
         if ($fmt === '') {
             $fmt = self::FORMAT_PDB;
@@ -109,5 +110,6 @@ trait DebuginfoPollTrait
         $debugInfo->container     = $cont !== '' ? $cont : null;
         $debugInfo->architecture  = $arch !== '' ? $arch : null;
         $debugInfo->build_id_kind = $kind !== '' ? $kind : null;
+        $debugInfo->has_source_lines = $lines !== '' ? (int) $lines : null;
     }
 }
