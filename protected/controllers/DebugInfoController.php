@@ -154,9 +154,8 @@ class DebugInfoController extends Controller
 		
 		// Check if user is authorized to perform this action
 		$this->checkAuthorization($model);
-		
-		// Dump file content to stdout
-		$model->dumpFileAttachmentContent();
+
+		throw new CHttpException(403, 'Downloading uploaded debug information files is disabled.');
 	}
 	
 	/**

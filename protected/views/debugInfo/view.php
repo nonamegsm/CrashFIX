@@ -121,7 +121,7 @@ if(count($processingErrors)>0):
 	<div class="div_actions">
 		<?php echo CHtml::form(); ?>		
 		<?php echo CHtml::hiddenField('id', $model->id); ?>		
-		<?php echo CHtml::link('Download File', $this->createUrl('/debugInfo/download', array('id'=>$model->id,)) ); ?>
+		<span class="hint">Download disabled after upload.</span>
 		<?php echo CHtml::link('Delete File', $this->createUrl('/debugInfo/delete', array('id'=>$model->id,)) ); ?>
 		<?php echo CHtml::endForm(); ?>	
 	</div>	
