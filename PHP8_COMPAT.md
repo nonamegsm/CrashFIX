@@ -83,6 +83,10 @@ Crash Report Uploads graph) had two PHP-8-incompatible patterns:
   (which have their own pre-existing issues unrelated to CrashFix).
   Returns 0 if clean. Use it before every push.
 - `php_lint.sh` — same, callable from WSL or Linux CI.
+- `packaging/deb/build-crashfix-yii1-deb.sh` — builds an installable
+  `crashfix-yii1-php8-compat` DEB under `dist/`.
+- `docs/SERVER-DEPENDENCIES.md` — copy/paste package install commands
+  for Debian / Ubuntu servers.
 
 ## Verifying after pulling this branch
 
@@ -108,6 +112,24 @@ load. If you see a 500, check `protected/runtime/application.log`
 for the actual stack trace — most non-Yii issues at this point are
 configuration drift (missing PHP extensions, MySQL credentials,
 file-permission changes) rather than language version.
+
+## Installing from the generated DEB
+
+Build the package from the repo root:
+
+```bash
+bash packaging/deb/build-crashfix-yii1-deb.sh
+```
+
+Install it on a Debian / Ubuntu server:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y ./dist/crashfix-yii1-php8-compat_1.0.10_all.deb
+```
+
+For the full PHP extension list, Apache/nginx examples, writable path
+setup, and daemon note, see [`docs/SERVER-DEPENDENCIES.md`](docs/SERVER-DEPENDENCIES.md).
 
 ## What this branch does NOT do
 

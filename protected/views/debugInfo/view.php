@@ -27,6 +27,23 @@ if(count($processingErrors)>0):
 
 <?php endif;?>
 
+<!-- Human-readable extraction summary -->
+<div class="span-18 last">
+	<div style="border: 1px solid #d7d7d7; background: #fafafa; padding: 12px 14px; margin: 0 0 14px 0;">
+		<h4 style="margin-top: 0;">What the importer extracted</h4>
+		<p class="hint" style="margin-top: 0;">
+			This summarizes the fields produced when the CrashFix daemon imported this file. Use it to verify that
+			format, architecture, and build id match the binaries in your crash dumps.
+		</p>
+		<dl style="margin-bottom: 0;">
+			<?php foreach($model->getExtractionSummaryDlItems() as $row): ?>
+				<dt style="font-weight: bold; margin-top: 8px;"><?php echo CHtml::encode($row['term']); ?></dt>
+				<dd style="margin-left: 18px;"><?php echo nl2br(CHtml::encode($row['description']), false); ?></dd>
+			<?php endforeach; ?>
+		</dl>
+	</div>
+</div>
+
 <!-- Actions Toolbar -->
 <div class="span-18 last">
 	<div class="div_actions">

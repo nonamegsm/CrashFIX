@@ -608,6 +608,170 @@ class DebugInfo extends CActiveRecord
 			return 'unknown';
 		return ((int)$this->has_source_lines) === 1 ? 'yes' : 'no';
 	}
+
+	/**
+	 * Human-readable rows describing what the daemon extracted from this file.
+	 * The view renders these as a definition list.
+	 */
+	public function getExtractionSummaryDlItems()
+	{
+		$rows = array();
+		$status = (int)$this->status;
+
+		if($status === self::STATUS_PENDING_PROCESSING ||
+			$status === self::STATUS_PROCESSING_IN_PROGRESS)
+		{
+			$rows[] = array(
+				'term'=>'Importer',
+				'description'=>'This upload is still queued or running. Detection results (format, container, architecture, build id, source line tables) appear here after processing finishes.',
+			);
+
+			return $rows;
+		}
+
+		if($status === self::STATUS_INVALID)
+		{
+			$rows[] = array(
+				'term'=>'Importer',
+				'description'=>'This debug info record is marked invalid or pending cleanup; details below may be incomplete or outdated.',
+			);
+		}
+
+		$rows[] = array('term'=>'Symbol format', 'description'=>$this->describeSymbolFormatForHumans());
+		$rows[] = array('term'=>'Container', 'description'=>$this->describeContainerForHumans());
+		$rows[] = array('term'=>'Architecture', 'description'=>$this->describeArchitectureForHumans());
+		$rows[] = array('term'=>'Source line mappings', 'description'=>$this->describeSourceLinesForHumans());
+		$rows[] = array('term'=>'Build identifier', 'description'=>$this->describeBuildIdentifierForHumans());
+
+		return $rows;
+	}
+
+	private function describeSymbolFormatForHumans()
+	{
+		$f = isset($this->format) ? (string)$this->format : '';
+		if($f === '')
+		{
+			$status = (int)$this->status;
+			if($status === self::STATUS_PROCESSED)
+				return 'Not recorded (likely imported before extended metadata was added, or the importer omitted the Format field).';
+
+			return 'Not reported yet.';
+		}
+
+		switch($f)
+		{
+			case self::FORMAT_PDB:
+				return 'Microsoft PDB - a separate symbol database, usually produced alongside a PE build and matched via GUID + Age.';
+			case self::FORMAT_DWARF_ELF:
+				return 'DWARF inside or next to an ELF binary - typical for Linux/Android native builds.';
+			case self::FORMAT_DWARF_PE:
+				return 'DWARF embedded in a Windows PE image (EXE/DLL) instead of a classic PDB sidecar.';
+			case self::FORMAT_UNKNOWN:
+				return 'The importer could not classify the debug bundle beyond "unknown".';
+		}
+
+		return 'Reported as "' . $f . '".';
+	}
+
+	private function describeContainerForHumans()
+	{
+		$c = isset($this->container) ? strtolower(trim((string)$this->container)) : '';
+		if($c === '')
+			return 'Not reported yet - the importer did not set Container.';
+
+		switch($c)
+		{
+			case 'pdb':
+				return 'Standalone PDB - debug records live in this file, not inside an executable image.';
+			case 'pe':
+				return 'PE image - Windows portable executable (EXE/DLL). Debug info may live inside the image or be referenced externally.';
+			case 'elf':
+				return 'ELF - shared object or executable on Unix-like systems.';
+		}
+
+		return 'Reported container type: "' . $c . '".';
+	}
+
+	private function describeArchitectureForHumans()
+	{
+		$a = isset($this->architecture) ? strtolower(trim((string)$this->architecture)) : '';
+		if($a === '')
+			return 'Not reported yet.';
+
+		switch($a)
+		{
+			case 'x86':
+			case 'i386':
+			case 'i686':
+				return '32-bit x86 - stacks and addresses are interpreted as IA-32.';
+			case 'x86_64':
+			case 'amd64':
+			case 'x64':
+				return '64-bit x86 - stacks use the AMD64 ABI.';
+			case 'aarch64':
+			case 'arm64':
+				return '64-bit ARM (AArch64).';
+			case 'arm':
+			case 'armv7':
+			case 'thumb':
+			case 'thumbv7':
+				return '32-bit ARM.';
+		}
+
+		return 'Reported machine target: "' . $a . '". Crash dumps must match this ISA for symbol translation.';
+	}
+
+	private function describeSourceLinesForHumans()
+	{
+		if(!isset($this->has_source_lines) || $this->has_source_lines === null || $this->has_source_lines === '')
+			return 'Unknown - the importer did not report whether .debug_line / PDB line records are usable.';
+
+		if(((int)$this->has_source_lines) === 1)
+			return 'Present - the bundle contains line number programs (DWARF) or equivalent PDB line info, so resolved stacks can show source file paths and approximate lines when addr2line/PDB lookup succeeds.';
+
+		return 'Not present or stripped - you may see function names without reliable source file and line attribution.';
+	}
+
+	private function describeBuildIdentifierForHumans()
+	{
+		$raw = isset($this->guid) ? (string)$this->guid : '';
+		if($raw === '' || strncmp($raw, 'tmp_', 4) === 0)
+			return 'No stable build id stored yet (placeholder GUID until the importer finishes, or legacy row).';
+
+		$kind = isset($this->build_id_kind) ? (string)$this->build_id_kind : '';
+
+		if($kind === self::BUILDID_GNU_BUILD_ID)
+			return "GNU build-id fingerprint (hex digest embedded in the ELF note). Minidumps tie modules to this digest.\n\nRaw value: " . $raw;
+
+		if($kind === self::BUILDID_PDB_GUID_AGE || $kind === self::BUILDID_PE_GUID_AGE)
+		{
+			$label = $kind === self::BUILDID_PDB_GUID_AGE ? 'PDB' : 'PE';
+			if(preg_match('/^([0-9a-fA-F]{32})(\d+)$/', $raw, $matches))
+			{
+				$prettyGuid = self::formatHexGuid32($matches[1]);
+				$age = $matches[2];
+
+				return $label . " modules are matched using a GUID plus an Age counter.\n\n"
+					. "- GUID (identity of the symbol stream): " . $prettyGuid . "\n"
+					. "- Age (link revision counter): " . $age . "\n\n"
+					. 'Minidumps encode the same pair so the server can pick this upload when resolving stacks.';
+			}
+
+			return $label . " GUID+Age could not be split automatically from the stored value.\n\nStored value: " . $raw;
+		}
+
+		return "Opaque build key stored by the importer.\n\nRaw value: " . $raw;
+	}
+
+	private static function formatHexGuid32($hex)
+	{
+		$hex = strtolower((string)$hex);
+		if(strlen($hex) !== 32 || !ctype_xdigit($hex))
+			return $hex;
+
+		return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+			. '-' . substr($hex, 16, 4) . '-' . substr($hex, 20, 12);
+	}
 	
 	/**
 	 * Retrieves a list of models based on the current search/filter conditions.
