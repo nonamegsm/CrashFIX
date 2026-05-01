@@ -298,8 +298,22 @@ class Bug extends CActiveRecord
 			if($crashGroup===null)
 				throw new CHttpException(403, 'Invalid request.');
 
-			$this->summary = $crashGroup->title;
-			$this->description = 'Bug on Collection #'.$crashGroup->id;
+			$resolvedTitle = $crashGroup->getLiveResolvedTitle();
+			$displayTitle = $resolvedTitle !== '' ? $resolvedTitle : $crashGroup->title;
+			$this->summary = MiscHelpers::addEllipsis($displayTitle, 256);
+
+			$reportCount = CrashReport::model()->countByAttributes(array('groupid'=>$crashGroup->id));
+			$description = array(
+				'Bug on Collection #'.$crashGroup->id,
+				'',
+				'Title: '.$crashGroup->title,
+			);
+			if($resolvedTitle !== '' && $resolvedTitle !== $crashGroup->title)
+				$description[] = 'Resolved title: '.$resolvedTitle;
+			$description[] = 'Reports: '.$reportCount;
+			$description[] = 'Distinct IPs: '.$crashGroup->getDistinctIPs();
+			$description[] = 'Collection URL: '.Yii::app()->createAbsoluteUrl('crashGroup/view', array('id'=>$crashGroup->id));
+			$this->description = MiscHelpers::addEllipsis(implode("\n", $description), 2048);
 		}
 		else if(isset($this->crashreports))
 		{

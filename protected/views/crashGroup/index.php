@@ -117,6 +117,11 @@ You have no projects assigned.
 			  'type'=>'raw',
 			  'value'=>'$data->formatBugListStr()',			  
           ),
+		  array(
+			  'header'=>'Open Bug',
+			  'type'=>'raw',
+			  'value'=>'Yii::app()->user->checkAccess("pperm_manage_bugs", array("project_id"=>Yii::app()->user->getCurProjectId())) && $data->canOpenNewBug() ? CHtml::link("Open Bug", array("bug/create", "crashgroup"=>$data->id), array("title"=>"Create a bug prefilled from this collection")) : ""',
+		  ),
           array(            // display 'dateuploaded' using an expression
               'name'=>'created',
               'value'=>'date("d/m/y H:i", $data->created)',
