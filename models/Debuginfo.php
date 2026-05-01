@@ -5,6 +5,7 @@ namespace app\models;
 use Yii;
 use yii\web\UploadedFile;
 use app\models\Lookup;
+use app\models\Processingerror;
 
 /**
  * This is the model class for table "tbl_debuginfo".
@@ -192,6 +193,172 @@ class Debuginfo extends \yii\db\ActiveRecord
             return 'unknown';
         }
         return ((int) $this->has_source_lines) === 1 ? 'yes' : 'no';
+    }
+
+    /**
+     * Errors recorded while importing / parsing this debug file (daemon / poll).
+     *
+     * @return \yii\db\ActiveQuery
+     */
+    public function getProcessingErrors()
+    {
+        return $this->hasMany(Processingerror::class, ['srcid' => 'id'])
+            ->andOnCondition(['type' => Processingerror::TYPE_DEBUG_INFO_ERROR])
+            ->orderBy(['id' => SORT_DESC]);
+    }
+
+    /**
+     * Rows for a definition-list style “what we extracted” panel on the detail page.
+     *
+     * @return list<array{term: string, description: string}>
+     */
+    public function getExtractionSummaryDlItems(): array
+    {
+        $rows = [];
+        $st = (int) $this->status;
+
+        if ($st === self::STATUS_WAITING || $st === self::STATUS_PROCESSING) {
+            $rows[] = [
+                'term' => 'Importer',
+                'description' => 'This upload is still queued or running. Detection results (format, container, architecture, build id, source line tables) appear here after processing finishes.',
+            ];
+
+            return $rows;
+        }
+
+        if ($st === self::STATUS_INVALID) {
+            $rows[] = [
+                'term' => 'Importer',
+                'description' => 'This debug info record is marked invalid or pending cleanup; details below may be incomplete or outdated.',
+            ];
+        }
+
+        if ($st === self::STATUS_UNSUPPORTED_FORMAT) {
+            $rows[] = [
+                'term' => 'Importer',
+                'description' => 'The daemon inspected this file but cannot parse or use this symbol format for stack resolution. Crash dumps will not match stacks against this artifact.',
+            ];
+        } elseif ($st === self::STATUS_PARTIALLY_MATCHED) {
+            $rows[] = [
+                'term' => 'Importer',
+                'description' => 'Symbols were stored with reduced fidelity (for example missing or stripped source line sections). Some frames may resolve without exact file/line information.',
+            ];
+        }
+
+        $rows[] = ['term' => 'Symbol format', 'description' => $this->describeSymbolFormatForHumans()];
+        $rows[] = ['term' => 'Container', 'description' => $this->describeContainerForHumans()];
+        $rows[] = ['term' => 'Architecture', 'description' => $this->describeArchitectureForHumans()];
+        $rows[] = ['term' => 'Source line mappings', 'description' => $this->describeSourceLinesForHumans()];
+        $rows[] = ['term' => 'Build identifier', 'description' => $this->describeBuildIdentifierForHumans()];
+
+        return $rows;
+    }
+
+    private function describeSymbolFormatForHumans(): string
+    {
+        $f = isset($this->format) ? (string) $this->format : '';
+        if ($f === '') {
+            $st = (int) $this->status;
+            if ($st === self::STATUS_READY || $st === self::STATUS_PARTIALLY_MATCHED) {
+                return 'Not recorded (likely imported before extended metadata was added, or the importer omitted the Format field).';
+            }
+
+            return 'Not reported yet.';
+        }
+
+        return match ($f) {
+            self::FORMAT_PDB => 'Microsoft PDB — a separate symbol database, usually produced alongside a PE build and matched via GUID + Age.',
+            self::FORMAT_DWARF_ELF => 'DWARF inside or next to an ELF binary — typical for Linux/Android native builds.',
+            self::FORMAT_DWARF_PE => 'DWARF embedded in a Windows PE image (EXE/DLL) instead of a classic PDB sidecar.',
+            self::FORMAT_UNKNOWN => 'The importer could not classify the debug bundle beyond “unknown”.',
+            default => 'Reported as “' . $f . '”.',
+        };
+    }
+
+    private function describeContainerForHumans(): string
+    {
+        $c = isset($this->container) ? strtolower(trim((string) $this->container)) : '';
+        if ($c === '') {
+            return 'Not reported yet — the importer did not set Container.';
+        }
+
+        return match ($c) {
+            'pdb' => 'Standalone PDB — debug records live in this file, not inside an executable image.',
+            'pe' => 'PE image — Windows portable executable (EXE/DLL). Debug info may live inside the image or be referenced externally.',
+            'elf' => 'ELF — shared object or executable on Unix-like systems.',
+            default => 'Reported container type: “' . $c . '”.',
+        };
+    }
+
+    private function describeArchitectureForHumans(): string
+    {
+        $a = isset($this->architecture) ? strtolower(trim((string) $this->architecture)) : '';
+        if ($a === '') {
+            return 'Not reported yet.';
+        }
+
+        return match ($a) {
+            'x86', 'i386', 'i686' => '32-bit x86 — stacks and addresses are interpreted as IA-32.',
+            'x86_64', 'amd64', 'x64' => '64-bit x86 — stacks use the AMD64 ABI.',
+            'aarch64', 'arm64' => '64-bit ARM (AArch64).',
+            'arm', 'armv7', 'thumb', 'thumbv7' => '32-bit ARM.',
+            default => 'Reported machine target: “' . $a . '”. Crash dumps must match this ISA for symbol translation.',
+        };
+    }
+
+    private function describeSourceLinesForHumans(): string
+    {
+        if (!isset($this->has_source_lines) || $this->has_source_lines === null) {
+            return 'Unknown — the importer did not report whether .debug_line / PDB line records are usable.';
+        }
+        if (((int) $this->has_source_lines) === 1) {
+            return 'Present — the bundle contains line number programs (DWARF) or equivalent PDB line info, so resolved stacks can show source file paths and approximate lines when addr2line/PDB lookup succeeds.';
+        }
+
+        return 'Not present or stripped — you may see function names without reliable source file and line attribution.';
+    }
+
+    private function describeBuildIdentifierForHumans(): string
+    {
+        $raw = (string) ($this->guid ?? '');
+        if ($raw === '' || strncmp($raw, 'tmp_', 4) === 0) {
+            return 'No stable build id stored yet (placeholder GUID until the importer finishes, or legacy row).';
+        }
+
+        $kind = isset($this->build_id_kind) ? (string) $this->build_id_kind : '';
+
+        if ($kind === self::BUILDID_GNU_BUILD_ID) {
+            return 'GNU build-id fingerprint (hex digest embedded in the ELF note). Minidumps tie modules to this digest.'
+                . "\n\nRaw value: " . $raw;
+        }
+
+        if ($kind === self::BUILDID_PDB_GUID_AGE || $kind === self::BUILDID_PE_GUID_AGE) {
+            $label = $kind === self::BUILDID_PDB_GUID_AGE ? 'PDB' : 'PE';
+            if (preg_match('/^([0-9a-fA-F]{32})(\d+)$/', $raw, $m)) {
+                $pretty = self::formatHexGuid32($m[1]);
+                $age = $m[2];
+
+                return "{$label} modules are matched using a GUID plus an Age counter.\n\n"
+                    . "• GUID (identity of the symbol stream): {$pretty}\n"
+                    . "• Age (link revision counter): {$age}\n\n"
+                    . 'Minidumps encode the same pair so the server can pick this upload when resolving stacks.';
+            }
+
+            return "{$label} GUID+Age could not be split automatically from the stored value.\n\nStored value: {$raw}";
+        }
+
+        return 'Opaque build key stored by the importer.' . "\n\nRaw value: " . $raw;
+    }
+
+    private static function formatHexGuid32(string $hex): string
+    {
+        $hex = strtolower($hex);
+        if (strlen($hex) !== 32 || !ctype_xdigit($hex)) {
+            return $hex;
+        }
+
+        return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
+            . '-' . substr($hex, 16, 4) . '-' . substr($hex, 20, 12);
     }
 
     public function getProject()

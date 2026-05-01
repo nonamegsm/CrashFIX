@@ -25,6 +25,26 @@ $this->params['breadcrumbs'][] = 'Debug Info File #' . $model->id;
         </div>
     <?php endif; ?>
 
+    <div class="card border-secondary mb-3">
+        <div class="card-header">
+            <strong>What the importer extracted</strong>
+            <span class="text-muted fw-normal ms-2 small">(human-readable)</span>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                This summarizes the fields produced when the CrashFix daemon imported this file (same data as
+                <strong>Symbol format</strong> below, explained in plain language). Use it to verify that format,
+                architecture, and build id match the binaries in your crash dumps.
+            </p>
+            <dl class="row mb-0 extraction-summary-dl">
+                <?php foreach ($model->getExtractionSummaryDlItems() as $row): ?>
+                    <dt class="col-sm-12 col-md-3"><?= Html::encode($row['term']) ?></dt>
+                    <dd class="col-sm-12 col-md-9"><?= nl2br(Html::encode($row['description']), false) ?></dd>
+                <?php endforeach; ?>
+            </dl>
+        </div>
+    </div>
+
     <div class="btn-toolbar mb-3 justify-content-end" role="toolbar">
         <div class="btn-group btn-group-sm" role="group">
             <?= Html::a('Download File', ['download', 'id' => $model->id], ['class' => 'btn btn-outline-primary']) ?>

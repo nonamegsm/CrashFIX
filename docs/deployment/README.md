@@ -50,6 +50,7 @@ before each escalation.
 ## Prerequisites
 
 - Apache (or nginx) with PHP 7.4+ and `mod_rewrite`
+- **Concrete apt/composer commands:** [SERVER-DEPENDENCIES.md](SERVER-DEPENDENCIES.md)
 - MySQL/MariaDB the legacy app already uses
 - Shell access to the box that runs the legacy app
 - A subdomain you can point at this server (DNS A/AAAA record)

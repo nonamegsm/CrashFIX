@@ -61,6 +61,8 @@ cd crashfix
 composer install
 ```
 
+For **production servers**, prefer `composer install --no-dev --optimize-autoloader` and see the full OS package list in [`docs/deployment/SERVER-DEPENDENCIES.md`](docs/deployment/SERVER-DEPENDENCIES.md).
+
 ### 2. Run the web installer
 
 Point a browser at the application URL (e.g. `http://localhost/crashfix/web/`)

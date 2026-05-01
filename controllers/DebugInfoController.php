@@ -191,7 +191,11 @@ class DebugInfoController extends Controller
 
     protected function findModel($id)
     {
-        if (($model = DebugInfo::findOne($id)) !== null) {
+        $model = DebugInfo::find()
+            ->with('processingErrors')
+            ->where(['id' => (int) $id])
+            ->one();
+        if ($model !== null) {
             return $model;
         }
         throw new NotFoundHttpException('The requested page does not exist.');
