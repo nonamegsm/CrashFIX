@@ -118,9 +118,6 @@ class StackFrame extends CActiveRecord
 		if(!isset($this->offs_in_module) || $this->offs_in_module === null)
 			return null;
 
-		if($this->hasUnwindWarningBefore())
-			return null;
-
 		$cacheKey = (string)$this->module_id.':'.(string)$this->offs_in_module;
 		if(array_key_exists($cacheKey, self::$_liveDwarfTitleCache))
 			return self::$_liveDwarfTitleCache[$cacheKey];
@@ -146,20 +143,6 @@ class StackFrame extends CActiveRecord
 
 		self::$_liveDwarfTitleCache[$cacheKey] = $result;
 		return $result;
-	}
-
-	private function hasUnwindWarningBefore()
-	{
-		if(!isset($this->thread_id) || !isset($this->id))
-			return false;
-
-		$criteria = new CDbCriteria;
-		$criteria->compare('thread_id', $this->thread_id);
-		$criteria->addCondition('id < :id');
-		$criteria->addCondition('(addr_pc IS NULL OR addr_pc = 0)');
-		$criteria->addCondition('(module_id IS NULL OR module_id = 0)');
-		$criteria->params[':id'] = $this->id;
-		return StackFrame::model()->exists($criteria);
 	}
 
 	private function findDwarfDebugInfo($moduleName)
