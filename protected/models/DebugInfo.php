@@ -772,6 +772,223 @@ class DebugInfo extends CActiveRecord
 		return substr($hex, 0, 8) . '-' . substr($hex, 8, 4) . '-' . substr($hex, 12, 4)
 			. '-' . substr($hex, 16, 4) . '-' . substr($hex, 20, 12);
 	}
+
+	/**
+	 * Diagnostic helper used by the Debug Info detail page.
+	 *
+	 * @param string $input Whitespace/comma separated RVA/VA values.
+	 * @param string $error Receives a user-facing error, if any.
+	 * @return array
+	 */
+	public function testSymbolAddressResolution($input, &$error)
+	{
+		$error = '';
+		$fileName = $this->getLocalFilePath();
+		if(!is_file($fileName))
+		{
+			$error = 'Debug info file is not present on this server path: '.$fileName;
+			return array();
+		}
+
+		$addresses = $this->parseSymbolTestAddresses($input);
+		if(count($addresses) == 0)
+		{
+			$error = 'Enter at least one address, for example: 0x77298d or EasyJtag.exe!+0x77298d';
+			return array();
+		}
+		if(count($addresses) > 12)
+			$addresses = array_slice($addresses, 0, 12);
+
+		$imageBase = $this->readPeImageBase($fileName);
+		$tool = $this->findAddr2LineTool();
+		if($tool === null)
+		{
+			$error = 'No addr2line tool found. Install binutils-mingw-w64-i686 / binutils-mingw-w64-x86-64 on the daemon host.';
+			return array();
+		}
+
+		$results = array();
+		foreach($addresses as $address)
+		{
+			$candidates = $this->symbolTestCandidates($address, $imageBase);
+			$row = array(
+				'input'=>'0x'.strtolower(dechex($address)),
+				'imageBase'=>$imageBase !== null ? '0x'.strtolower(dechex($imageBase)) : 'unknown',
+				'tool'=>$tool,
+				'file'=>$fileName,
+				'candidates'=>array(),
+			);
+
+			foreach($candidates as $candidate)
+			{
+				$resolved = $this->runAddr2Line($tool, $fileName, $candidate['address']);
+				$row['candidates'][] = array(
+					'label'=>$candidate['label'],
+					'address'=>'0x'.strtolower(dechex($candidate['address'])),
+					'symbol'=>$resolved['symbol'],
+					'fileLine'=>$resolved['fileLine'],
+					'resolved'=>$resolved['resolved'],
+					'error'=>$resolved['error'],
+				);
+			}
+
+			$results[] = $row;
+		}
+
+		return $results;
+	}
+
+	private function parseSymbolTestAddresses($input)
+	{
+		$out = array();
+		$parts = preg_split('/[\s,;]+/', trim((string)$input));
+		foreach($parts as $part)
+		{
+			if($part === '')
+				continue;
+
+			if(preg_match('/\+?(0x[0-9a-fA-F]+)/', $part, $m))
+				$part = $m[1];
+
+			$value = null;
+			if(preg_match('/^0x[0-9a-fA-F]+$/', $part))
+				$value = hexdec(substr($part, 2));
+			else if(preg_match('/^[0-9]+$/', $part))
+				$value = (int)$part;
+
+			if($value !== null && $value >= 0)
+				$out[] = $value;
+		}
+
+		return array_values(array_unique($out));
+	}
+
+	private function symbolTestCandidates($address, $imageBase)
+	{
+		$items = array(array('label'=>'raw input', 'address'=>$address));
+		if($imageBase !== null && $imageBase > 0)
+		{
+			$items[] = array('label'=>'image base + input', 'address'=>$imageBase + $address);
+			if($address >= $imageBase)
+				$items[] = array('label'=>'input - image base', 'address'=>$address - $imageBase);
+		}
+
+		$unique = array();
+		$out = array();
+		foreach($items as $item)
+		{
+			$key = (string)$item['address'];
+			if(isset($unique[$key]))
+				continue;
+			$unique[$key] = true;
+			$out[] = $item;
+		}
+
+		return $out;
+	}
+
+	private function findAddr2LineTool()
+	{
+		$arch = isset($this->architecture) ? strtolower((string)$this->architecture) : '';
+		$candidates = array();
+		if($arch === 'x86' || $arch === 'i386' || $arch === 'i686')
+			$candidates[] = 'i686-w64-mingw32-addr2line';
+		else if($arch === 'x86_64' || $arch === 'amd64' || $arch === 'x64')
+			$candidates[] = 'x86_64-w64-mingw32-addr2line';
+
+		$candidates[] = 'llvm-addr2line';
+		$candidates[] = 'addr2line';
+
+		foreach($candidates as $tool)
+		{
+			$cmd = 'command -v '.escapeshellarg($tool).' 2>/dev/null';
+			$output = array();
+			$code = 1;
+			@exec($cmd, $output, $code);
+			if($code === 0 && isset($output[0]) && trim($output[0]) !== '')
+				return $tool;
+		}
+
+		return null;
+	}
+
+	private function runAddr2Line($tool, $fileName, $address)
+	{
+		$hex = '0x'.strtolower(dechex($address));
+		$cmd = 'timeout 12s '.escapeshellcmd($tool).' -f -C -e '.escapeshellarg($fileName).' '.escapeshellarg($hex).' 2>&1';
+		$output = array();
+		$code = 0;
+		@exec($cmd, $output, $code);
+
+		$symbol = isset($output[0]) ? trim($output[0]) : '';
+		$fileLine = isset($output[1]) ? trim($output[1]) : '';
+		$error = '';
+		if($code === 124)
+			$error = 'addr2line timed out';
+		else if($code !== 0 && count($output) > 0)
+			$error = implode("\n", $output);
+
+		$resolved = $symbol !== '' && $symbol !== '??' &&
+			$fileLine !== '' && $fileLine !== '??:0' && $fileLine !== '??:?';
+
+		return array(
+			'symbol'=>$symbol,
+			'fileLine'=>$fileLine,
+			'resolved'=>$resolved,
+			'error'=>$error,
+		);
+	}
+
+	private function readPeImageBase($fileName)
+	{
+		$f = @fopen($fileName, 'rb');
+		if($f === false)
+			return null;
+
+		$result = null;
+		do
+		{
+			if(fseek($f, 0x3c) !== 0)
+				break;
+			$peOffBuf = fread($f, 4);
+			if(strlen($peOffBuf) !== 4)
+				break;
+			$peOff = $this->readUInt32Le($peOffBuf);
+			if(fseek($f, $peOff + 24) !== 0)
+				break;
+			$optional = fread($f, 64);
+			if(strlen($optional) < 64)
+				break;
+
+			$magic = $this->readUInt16Le(substr($optional, 0, 2));
+			if($magic === 0x10b)
+				$result = $this->readUInt32Le(substr($optional, 28, 4));
+			else if($magic === 0x20b)
+				$result = $this->readUInt64Le(substr($optional, 24, 8));
+		}
+		while(false);
+
+		fclose($f);
+		return $result;
+	}
+
+	private function readUInt16Le($bytes)
+	{
+		$v = unpack('v', $bytes);
+		return $v[1];
+	}
+
+	private function readUInt32Le($bytes)
+	{
+		$v = unpack('V', $bytes);
+		return $v[1];
+	}
+
+	private function readUInt64Le($bytes)
+	{
+		$parts = unpack('Vlo/Vhi', $bytes);
+		return $parts['lo'] + ($parts['hi'] * 4294967296);
+	}
 	
 	/**
 	 * Retrieves a list of models based on the current search/filter conditions.

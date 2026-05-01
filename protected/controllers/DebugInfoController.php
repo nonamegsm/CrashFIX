@@ -46,6 +46,7 @@ class DebugInfoController extends Controller
 					'delete', 
 					'deleteMultiple', 
 					'reprocessMultiple',
+					'testResolve',
 					'uploadFile'
 				),
 				'users'=>array('@'),
@@ -112,6 +113,33 @@ class DebugInfoController extends Controller
 		
 		$this->render('view', array(
 			'model'=>$model,
+			'symbolTestInput'=>'',
+			'symbolTestResults'=>array(),
+			'symbolTestError'=>'',
+		));
+	}
+
+	/**
+	 * Runs a one-off addr2line test for entered RVA / VA values.
+	 * This is diagnostic only; it does not modify crash reports.
+	 */
+	public function actionTestResolve($id)
+	{
+		$model = $this->loadModel($id);
+		$this->checkAuthorization($model);
+
+		if(!Yii::app()->request->isPostRequest)
+			throw new CHttpException(400, 'Invalid request.');
+
+		$input = isset($_POST['SymbolTest']['addresses']) ? $_POST['SymbolTest']['addresses'] : '';
+		$symbolTestError = '';
+		$symbolTestResults = $model->testSymbolAddressResolution($input, $symbolTestError);
+
+		$this->render('view', array(
+			'model'=>$model,
+			'symbolTestInput'=>$input,
+			'symbolTestResults'=>$symbolTestResults,
+			'symbolTestError'=>$symbolTestError,
 		));
 	}
 	

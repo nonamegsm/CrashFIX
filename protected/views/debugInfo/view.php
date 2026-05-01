@@ -4,6 +4,9 @@
 	'Debug Info'=>array('index'),
 	'Debug Info File #'.CHtml::encode($model->id),
 );
+$symbolTestInput = isset($symbolTestInput) ? $symbolTestInput : '';
+$symbolTestResults = isset($symbolTestResults) ? $symbolTestResults : array();
+$symbolTestError = isset($symbolTestError) ? $symbolTestError : '';
 ?>
 
 <?php
@@ -41,6 +44,75 @@ if(count($processingErrors)>0):
 				<dd style="margin-left: 18px;"><?php echo nl2br(CHtml::encode($row['description']), false); ?></dd>
 			<?php endforeach; ?>
 		</dl>
+
+		<hr />
+		<h4>Test address resolution</h4>
+		<p class="hint">
+			Paste one or more raw stack offsets / RVAs (for example <code>0x77298d</code> or
+			<code>EasyJtag.exe!+0x77298d</code>). CrashFix will run addr2line against this exact
+			uploaded file and compare raw input with image-base adjusted addresses.
+		</p>
+		<?php echo CHtml::beginForm($this->createUrl('/debugInfo/testResolve', array('id'=>$model->id)), 'post'); ?>
+			<?php echo CHtml::textArea('SymbolTest[addresses]', $symbolTestInput, array(
+				'rows'=>3,
+				'style'=>'width: 98%; font-family: monospace;',
+				'placeholder'=>'0x77298d 0x88c047 0xe5ea5',
+			)); ?>
+			<div style="margin-top: 8px;">
+				<?php echo CHtml::submitButton('Test address resolution'); ?>
+			</div>
+		<?php echo CHtml::endForm(); ?>
+
+		<?php if($symbolTestError !== ''): ?>
+			<div class="flash-error" style="margin-top: 10px;"><?php echo CHtml::encode($symbolTestError); ?></div>
+		<?php endif; ?>
+
+		<?php if(count($symbolTestResults) > 0): ?>
+			<table class="items" style="margin-top: 10px; width: 100%;">
+				<thead>
+					<tr>
+						<th>Input</th>
+						<th>Candidate</th>
+						<th>Address</th>
+						<th>Symbol</th>
+						<th>File / line</th>
+					</tr>
+				</thead>
+				<tbody>
+				<?php foreach($symbolTestResults as $result): ?>
+					<tr>
+						<td colspan="5" style="background: #f0f0f0;">
+							<strong><?php echo CHtml::encode($result['input']); ?></strong>
+							<span class="hint">
+								tool: <?php echo CHtml::encode($result['tool']); ?>,
+								image base: <?php echo CHtml::encode($result['imageBase']); ?>
+							</span>
+						</td>
+					</tr>
+					<?php foreach($result['candidates'] as $candidate): ?>
+						<tr>
+							<td><?php echo CHtml::encode($result['input']); ?></td>
+							<td><?php echo CHtml::encode($candidate['label']); ?></td>
+							<td><code><?php echo CHtml::encode($candidate['address']); ?></code></td>
+							<td>
+								<?php if($candidate['resolved']): ?>
+									<strong><?php echo CHtml::encode($candidate['symbol']); ?></strong>
+								<?php else: ?>
+									<span class="hint"><?php echo CHtml::encode($candidate['symbol'] !== '' ? $candidate['symbol'] : 'not resolved'); ?></span>
+								<?php endif; ?>
+							</td>
+							<td>
+								<?php echo CHtml::encode($candidate['fileLine']); ?>
+								<?php if($candidate['error'] !== ''): ?>
+									<br /><span class="hint"><?php echo nl2br(CHtml::encode($candidate['error']), false); ?></span>
+								<?php endif; ?>
+							</td>
+						</tr>
+					<?php endforeach; ?>
+				<?php endforeach; ?>
+				</tbody>
+			</table>
+		<?php endif; ?>
 	</div>
 </div>
 
