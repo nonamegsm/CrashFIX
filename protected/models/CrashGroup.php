@@ -18,6 +18,8 @@ class CrashGroup extends CActiveRecord
 	// Search related variables
 	public $filter; // Simple search filter.
 	public $bugStatusFilter; // Bug status filter.
+
+	private static $_liveResolvedTitleCache = array();
 	
 	/**
 	 * Returns the static model of the specified AR class.
@@ -81,6 +83,7 @@ class CrashGroup extends CActiveRecord
 			'created' => 'Date Created',
 			'status' => 'Status',
 			'title' => 'Title',
+			'liveResolvedTitle' => 'Resolved Title',
 			'crashReportCount' => 'Reports',
 		);
 	}
@@ -198,6 +201,157 @@ class CrashGroup extends CActiveRecord
                 'pageSize'=>50,
             ),
 		));
+	}
+
+	public function getLiveResolvedTitle()
+	{
+		if(array_key_exists($this->id, self::$_liveResolvedTitleCache))
+			return self::$_liveResolvedTitleCache[$this->id];
+
+		$result = '';
+		$titleParts = $this->parseModuleOffsetTitle($this->title);
+		if($titleParts !== null)
+		{
+			$criteria = new CDbCriteria;
+			$criteria->compare('groupid', $this->id);
+			$criteria->compare('status', CrashReport::STATUS_PROCESSED);
+			$criteria->order = 'id DESC';
+			$criteria->limit = 5;
+
+			$reports = CrashReport::model()->findAll($criteria);
+			foreach($reports as $report)
+			{
+				$resolved = $this->resolveTitleFromReportFrames($report, $titleParts);
+				if($resolved === '')
+					$resolved = $this->resolveTitleFromReportModule($report, $titleParts);
+				if($resolved !== '')
+				{
+					$result = $resolved;
+					break;
+				}
+			}
+		}
+
+		self::$_liveResolvedTitleCache[$this->id] = $result;
+		return $result;
+	}
+
+	public function formatLiveResolvedTitle()
+	{
+		$title = $this->getLiveResolvedTitle();
+		if($title === '')
+			return '';
+
+		return CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($title, 140)), array('crashGroup/view', 'id'=>$this->id));
+	}
+
+	private function resolveTitleFromReportFrames($report, $titleParts)
+	{
+		$thread = $report->getExceptionThread();
+		if($thread === null)
+			return '';
+
+		$criteria = new CDbCriteria;
+		$criteria->compare('thread_id', $thread->id);
+		$criteria->order = 'id ASC';
+		$frames = StackFrame::model()->findAll($criteria);
+
+		foreach($frames as $frame)
+		{
+			if(!isset($frame->module) || $frame->module === null)
+				continue;
+
+			if(!$this->frameMatchesModuleOffset($frame, $titleParts))
+				continue;
+
+			$resolved = $frame->getTitle();
+			if($resolved !== '' && !$this->isRawModuleOffsetTitle($resolved))
+				return $resolved;
+		}
+
+		return '';
+	}
+
+	private function resolveTitleFromReportModule($report, $titleParts)
+	{
+		$criteria = new CDbCriteria;
+		$criteria->compare('crashreport_id', $report->id);
+		$criteria->compare('name', $titleParts['module']);
+		$module = Module::model()->find($criteria);
+		if($module === null)
+			return '';
+
+		$debugInfo = $this->findDwarfDebugInfoForModule($module, $titleParts['module']);
+		if($debugInfo === null)
+			return '';
+
+		$error = '';
+		$rows = $debugInfo->testSymbolAddressResolution('0x'.dechex($titleParts['offset']), $error);
+		foreach($rows as $row)
+		{
+			foreach($row['candidates'] as $candidate)
+			{
+				if(!empty($candidate['resolved']))
+					return $this->formatLiveDwarfTitle($titleParts['module'], $candidate);
+			}
+		}
+
+		return '';
+	}
+
+	private function findDwarfDebugInfoForModule($module, $moduleName)
+	{
+		if(isset($module->debuginfo) && $module->debuginfo !== null)
+			return $module->debuginfo;
+
+		if(!isset($module->timestamp) || $module->timestamp === null || $moduleName === '')
+			return null;
+
+		$timestampHex = sprintf('%08x', (int)$module->timestamp);
+		return DebugInfo::model()->find(
+			'filename=:filename AND guid LIKE :guid AND status=:status',
+			array(
+				':filename'=>$moduleName,
+				':guid'=>'pe-'.$timestampHex.'-%',
+				':status'=>DebugInfo::STATUS_PROCESSED,
+			)
+		);
+	}
+
+	private function frameMatchesModuleOffset($frame, $titleParts)
+	{
+		if(!isset($frame->offs_in_module) || $frame->offs_in_module === null)
+			return false;
+
+		if(strcasecmp($frame->module->name, $titleParts['module']) !== 0)
+			return false;
+
+		return (int)$frame->offs_in_module === $titleParts['offset'];
+	}
+
+	private function parseModuleOffsetTitle($title)
+	{
+		if(!preg_match('/^(.+)!\\+0x([0-9a-fA-F]+)$/', trim((string)$title), $matches))
+			return null;
+
+		return array(
+			'module'=>$matches[1],
+			'offset'=>hexdec($matches[2]),
+		);
+	}
+
+	private function isRawModuleOffsetTitle($title)
+	{
+		return preg_match('/^.+!\\+0x[0-9a-fA-F]+$/', trim((string)$title)) === 1;
+	}
+
+	private function formatLiveDwarfTitle($moduleName, $candidate)
+	{
+		$title = $moduleName.'! '.$candidate['symbol'].' ';
+		if(!empty($candidate['fileLine']))
+			$title .= '['.$candidate['fileLine'].'] ';
+		$title .= '(live DWARF, '.$candidate['label'].')';
+		return $title;
 	}
 	
 	/**

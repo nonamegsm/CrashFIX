@@ -98,6 +98,12 @@ You have no projects assigned.
 			  'type' => 'raw',
 			  'value'=>'CHtml::link(MiscHelpers::addEllipsis($data->title, 120), \'view/\'.$data->id)',			  
           ),
+		  array(                          			  
+			  'name'=>'liveResolvedTitle',
+			  'header'=>'Resolved Title',
+			  'type'=>'raw',
+			  'value'=>'$data->formatLiveResolvedTitle()',			  
+          ),
 		  'crashReportCount',
           array(                          			  
 			  'name'=>'distinctIPs',

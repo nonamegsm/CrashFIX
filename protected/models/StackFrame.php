@@ -52,6 +52,8 @@ class StackFrame extends CActiveRecord
 			'module'=>array(self::BELONGS_TO, 'Module', 'module_id'),		
 		);
 	}
+
+	private static $_liveDwarfTitleCache = array();
 	
 	/**
 	 * Formats the title of this stack frame.
@@ -96,7 +98,11 @@ class StackFrame extends CActiveRecord
 			if(isset($this->module_id) && isset($this->module))
 			{
                 $moduleName = $this->module->name;
-                $title = $title.$moduleName.'!+0x'.dechex($this->offs_in_module);			                                				
+				$liveTitle = $this->getLiveDwarfTitle($moduleName);
+				if($liveTitle !== null)
+					$title = $liveTitle;
+				else
+					$title = $title.$moduleName.'!+0x'.dechex($this->offs_in_module);			                                				
 			}
 			else
 			{
@@ -104,6 +110,66 @@ class StackFrame extends CActiveRecord
 			}
 		}		
 		
+		return $title;
+	}
+
+	private function getLiveDwarfTitle($moduleName)
+	{
+		if(!isset($this->offs_in_module) || $this->offs_in_module === null)
+			return null;
+
+		$cacheKey = (string)$this->module_id.':'.(string)$this->offs_in_module;
+		if(array_key_exists($cacheKey, self::$_liveDwarfTitleCache))
+			return self::$_liveDwarfTitleCache[$cacheKey];
+
+		$result = null;
+		$debugInfo = $this->findDwarfDebugInfo($moduleName);
+		if($debugInfo !== null)
+		{
+			$error = '';
+			$rows = $debugInfo->testSymbolAddressResolution('0x'.dechex($this->offs_in_module), $error);
+			foreach($rows as $row)
+			{
+				foreach($row['candidates'] as $candidate)
+				{
+					if(!empty($candidate['resolved']))
+					{
+						$result = $this->formatLiveDwarfTitle($moduleName, $candidate);
+						break 2;
+					}
+				}
+			}
+		}
+
+		self::$_liveDwarfTitleCache[$cacheKey] = $result;
+		return $result;
+	}
+
+	private function findDwarfDebugInfo($moduleName)
+	{
+		if(isset($this->module->debuginfo) && $this->module->debuginfo !== null)
+			return $this->module->debuginfo;
+
+		if(!isset($this->module->timestamp) || $this->module->timestamp === null || $moduleName === '')
+			return null;
+
+		$timestampHex = sprintf('%08x', (int)$this->module->timestamp);
+		return DebugInfo::model()->find(
+			'filename=:filename AND guid LIKE :guid AND status=:status',
+			array(
+				':filename'=>$moduleName,
+				':guid'=>'pe-'.$timestampHex.'-%',
+				':status'=>DebugInfo::STATUS_PROCESSED,
+			)
+		);
+	}
+
+	private function formatLiveDwarfTitle($moduleName, $candidate)
+	{
+		$title = $moduleName.'! '.$candidate['symbol'].' ';
+		if(!empty($candidate['fileLine']))
+			$title .= '['.$candidate['fileLine'].'] ';
+		$title .= '(live DWARF, '.$candidate['label'].')';
 		return $title;
 	}
 }
