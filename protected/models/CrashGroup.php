@@ -291,7 +291,7 @@ class CrashGroup extends CActiveRecord
 		{
 			foreach($row['candidates'] as $candidate)
 			{
-				if(!empty($candidate['resolved']))
+				if(!empty($candidate['resolved']) && $candidate['label'] === 'image base + input')
 					return $this->formatLiveDwarfTitle($titleParts['module'], $candidate);
 			}
 		}
@@ -350,7 +350,7 @@ class CrashGroup extends CActiveRecord
 		$title = $moduleName.'! '.$candidate['symbol'].' ';
 		if(!empty($candidate['fileLine']))
 			$title .= '['.$candidate['fileLine'].'] ';
-		$title .= '(live DWARF, '.$candidate['label'].')';
+		$title .= '(live DWARF)';
 		return $title;
 	}
 	
