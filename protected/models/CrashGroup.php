@@ -216,7 +216,7 @@ class CrashGroup extends CActiveRecord
 			$criteria->compare('groupid', $this->id);
 			$criteria->compare('status', CrashReport::STATUS_PROCESSED);
 			$criteria->order = 'id DESC';
-			$criteria->limit = 5;
+			$criteria->limit = 25;
 
 			$reports = CrashReport::model()->findAll($criteria);
 			foreach($reports as $report)
@@ -323,7 +323,7 @@ class CrashGroup extends CActiveRecord
 		if(!isset($frame->offs_in_module) || $frame->offs_in_module === null)
 			return false;
 
-		if(strcasecmp($frame->module->name, $titleParts['module']) !== 0)
+		if(strcasecmp($this->shortModuleName($frame->module->name), $this->shortModuleName($titleParts['module'])) !== 0)
 			return false;
 
 		return (int)$frame->offs_in_module === $titleParts['offset'];
@@ -343,6 +343,12 @@ class CrashGroup extends CActiveRecord
 	private function isRawModuleOffsetTitle($title)
 	{
 		return preg_match('/^.+!\\+0x[0-9a-fA-F]+$/', trim((string)$title)) === 1;
+	}
+
+	private function shortModuleName($moduleName)
+	{
+		$moduleName = str_replace('\\', '/', (string)$moduleName);
+		return basename($moduleName);
 	}
 
 	private function formatLiveDwarfTitle($moduleName, $candidate)
