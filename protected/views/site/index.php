@@ -151,7 +151,7 @@ You have no projects assigned.
 					$percent = sprintf("%.0f", $reportCount!=0?100*$collection->crashReportCount/$reportCount:0);
 					$liveResolvedTitle = $collection->getLiveResolvedTitle();
 					$liveResolvedInfo = $liveResolvedTitle!=='' ? ' <span class="quiet small">function: '.CHtml::encode(MiscHelpers::addEllipsis($liveResolvedTitle, 160)).'</span>' : '';
-					echo '<li>'.$collection->crashReportCount.' reports ('.$percent.'%) in '.CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($collection->title, 110)), array('crashGroup/view', 'id'=>$collection->id), array('class'=>'top-collection-title')).$liveResolvedInfo.'</li>';
+					echo '<li>'.$collection->crashReportCount.' reports ('.$percent.'%) in '.CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($collection->getTitleWithRva(), 140)), array('crashGroup/view', 'id'=>$collection->id), array('class'=>'top-collection-title')).$liveResolvedInfo.'</li>';
 				}				
 				echo '</ul>';
 			}

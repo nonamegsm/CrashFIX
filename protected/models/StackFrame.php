@@ -102,7 +102,7 @@ class StackFrame extends CActiveRecord
 				if($liveTitle !== null)
 					$title = $liveTitle;
 				else
-					$title = $title.$moduleName.'!+0x'.dechex($this->offs_in_module);			                                				
+					$title = $title.CrashGroup::formatModuleOffsetRvaTitle($moduleName.'!+0x'.dechex($this->offs_in_module));			                                				
 			}
 			else
 			{

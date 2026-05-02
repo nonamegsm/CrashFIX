@@ -14,6 +14,7 @@ class CrashGroup extends CActiveRecord
 {
 	// Status constants
 	const STATUS_NEW = 1; // New group
+	const DEFAULT_IMAGE_BASE = 0x400000;
 	
 	// Search related variables
 	public $filter; // Simple search filter.
@@ -243,6 +244,25 @@ class CrashGroup extends CActiveRecord
 			return '';
 
 		return CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($title, 140)), array('crashGroup/view', 'id'=>$this->id));
+	}
+
+	public function getTitleWithRva()
+	{
+		return self::formatModuleOffsetRvaTitle($this->title);
+	}
+
+	public static function formatModuleOffsetRvaTitle($title)
+	{
+		$title = (string)$title;
+		if(stripos($title, 'RVA:') !== false)
+			return $title;
+
+		if(!preg_match('/^(.+!\\+0x)([0-9a-fA-F]+)(.*)$/', trim($title), $matches))
+			return $title;
+
+		$offset = hexdec($matches[2]);
+		$rva = self::DEFAULT_IMAGE_BASE + $offset;
+		return $matches[1].strtolower($matches[2]).' ( RVA: 0x'.strtoupper(dechex($rva)).' )'.$matches[3];
 	}
 
 	private function resolveTitleFromReportFrames($report, $titleParts)

@@ -96,7 +96,7 @@ You have no projects assigned.
 		  array(                          			  
 			  'name'=>'title',
 			  'type' => 'raw',
-			  'value'=>'CHtml::link(MiscHelpers::addEllipsis($data->title, 120), \'view/\'.$data->id)',			  
+			  'value'=>'CHtml::link(MiscHelpers::addEllipsis($data->getTitleWithRva(), 140), \'view/\'.$data->id)',			  
           ),
 		  array(                          			  
 			  'name'=>'liveResolvedTitle',

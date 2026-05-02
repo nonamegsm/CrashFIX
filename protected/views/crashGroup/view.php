@@ -55,7 +55,11 @@ if($bugList=='')
 $this->widget('zii.widgets.CDetailView', array(
 	'data'=>$model,
 	'attributes'=>array(		
-		'title',
+		array(
+			'name'=>'title',
+			'type'=>'text',
+			'value'=>$model->getTitleWithRva(),
+		),
 		array(  
             'name'=>'created',
             'type'=>'datetime',            

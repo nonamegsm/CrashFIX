@@ -123,7 +123,7 @@ $this->widget('zii.widgets.CDetailView', array(
 		array(        
 			'name'=>'groupid',
             'type'=>'raw',
-            'value'=>CHtml::link(CHtml::encode($model->collection->title), array('crashGroup/view', 'id'=>$model->groupid)),
+            'value'=>CHtml::link(CHtml::encode($model->collection->getTitleWithRva()), array('crashGroup/view', 'id'=>$model->groupid)),
         ),
 		array(  
 			'label'=>'Open Bug(s)',
