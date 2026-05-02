@@ -80,7 +80,7 @@ class Thread extends CActiveRecord
 		// Look for uppermost stack frame.
 		$criteria=new CDbCriteria;
 		$criteria->compare('thread_id', $this->id);		
-		$criteria->addCondition('und_symbol_name IS NOT NULL');
+		$criteria->addCondition('(und_symbol_name IS NOT NULL OR symbol_name IS NOT NULL)');
 		$criteria->order = 'id ASC';		
 		$stackFrames = StackFrame::model()->findAll($criteria);
 		

@@ -85,6 +85,86 @@ class CrashGroup extends CActiveRecord
 	}
 
 	/**
+	 * Finds a symbolized function title for offset-only collection names such
+	 * as "EasyJtag.exe!+0x91da1" using already imported debug stack frames.
+	 */
+	public function getDebugInfoFunctionTitle()
+	{
+		$moduleName = '';
+		$offset = null;
+		if(preg_match('/^(.+)!\\+0x([0-9a-f]+)(?:\\s|$)/i', (string)$this->title, $matches))
+		{
+			$moduleName = strtolower($this->shortModuleName($matches[1]));
+			$offset = hexdec($matches[2]);
+		}
+
+		if($offset===null)
+			return '';
+
+		$frame = $this->findSymbolizedFrameByModuleOffset((int)$offset, $moduleName);
+		if($frame!==null)
+			return $frame->title;
+
+		return $this->findSymbolizedExceptionFrameTitle();
+	}
+
+	private function findSymbolizedFrameByModuleOffset($offset, $moduleName)
+	{
+		$criteria = new CDbCriteria;
+		$criteria->alias = 'sf';
+		$criteria->join =
+			'INNER JOIN {{thread}} th ON th.id = sf.thread_id ' .
+			'INNER JOIN {{crashreport}} cr ON cr.id = th.crashreport_id ' .
+			'LEFT JOIN {{module}} m ON m.id = sf.module_id';
+		$criteria->compare('cr.groupid', $this->id, false, 'AND');
+		$criteria->compare('sf.offs_in_module', $offset, false, 'AND');
+		$criteria->addCondition('(sf.und_symbol_name IS NOT NULL OR sf.symbol_name IS NOT NULL)');
+		$criteria->order = 'sf.id ASC';
+		$criteria->limit = 25;
+
+		$frames = StackFrame::model()->findAll($criteria);
+		foreach($frames as $frame)
+		{
+			if($moduleName==='')
+				return $frame;
+
+			if(isset($frame->module) && strtolower($this->shortModuleName((string)$frame->module->name))===$moduleName)
+				return $frame;
+		}
+
+		return null;
+	}
+
+	private function findSymbolizedExceptionFrameTitle()
+	{
+		$criteria = new CDbCriteria;
+		$criteria->compare('groupid', $this->id, false, 'AND');
+		$criteria->addCondition('exception_thread_id IS NOT NULL');
+		$criteria->order = 'id ASC';
+		$criteria->limit = 25;
+		$reports = CrashReport::model()->findAll($criteria);
+
+		foreach($reports as $report)
+		{
+			$thread = $report->exceptionThread;
+			if($thread===null)
+				continue;
+
+			$title = $thread->getExceptionStackFrameTitle();
+			if($title!=='' && $title!==(string)$this->title)
+				return $title;
+		}
+
+		return '';
+	}
+
+	private function shortModuleName($moduleName)
+	{
+		$moduleName = str_replace('\\', '/', $moduleName);
+		return basename($moduleName);
+	}
+
+	/**
 	 * This method is executed before AR is saved to database.
 	 * @return boolean true on success.
 	 */

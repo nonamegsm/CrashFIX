@@ -86,7 +86,10 @@ class Thread extends \yii\db\ActiveRecord
     {
         $frames = Stackframe::find()
             ->where(['thread_id' => $this->id])
-            ->andWhere(['is not', 'und_symbol_name', null])
+            ->andWhere(['or',
+                ['is not', 'und_symbol_name', null],
+                ['is not', 'symbol_name', null],
+            ])
             ->orderBy(['id' => SORT_ASC])
             ->all();
 

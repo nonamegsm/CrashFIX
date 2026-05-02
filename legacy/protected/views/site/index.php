@@ -146,7 +146,9 @@ You have no projects assigned.
                 foreach($topCollections as $collection)
 				{					
 					$percent = sprintf("%.0f", $reportCount!=0?100*$collection->crashReportCount/$reportCount:0);
-					echo '<li>'.$collection->crashReportCount.' reports ('.$percent.'%) in '.CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($collection->title, 110)), array('crashGroup/view', 'id'=>$collection->id), array('class'=>'top-collection-title')).'</li>';
+					$debugFunctionTitle = $collection->getDebugInfoFunctionTitle();
+					$debugFunctionInfo = $debugFunctionTitle!=='' ? ' <span class="quiet small">function: '.CHtml::encode(MiscHelpers::addEllipsis($debugFunctionTitle, 160)).'</span>' : '';
+					echo '<li>'.$collection->crashReportCount.' reports ('.$percent.'%) in '.CHtml::link(CHtml::encode(MiscHelpers::addEllipsis($collection->title, 110)), array('crashGroup/view', 'id'=>$collection->id), array('class'=>'top-collection-title')).$debugFunctionInfo.'</li>';
 				}				
 				echo '</ul>';
 			}

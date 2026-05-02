@@ -176,8 +176,17 @@ $curProjectId = $user->getCurProjectId();
                             $totalReportCount = $user->getCurProject()->getCrashReportCount($totalFileSize2, $percentOfDiskQuota2, $curProjectVer);
                             foreach ($topCollections as $collection):
                                 $percent = sprintf("%.0f", $totalReportCount != 0 ? 100 * $collection->crashReportCount / $totalReportCount : 0);
+                                $debugFunctionTitle = $collection->getDebugInfoFunctionTitle();
                             ?>
-                                <li><?= $collection->crashReportCount ?> reports (<?= $percent ?>%) in <?= Html::a(Html::encode(MiscHelpers::addEllipsis($collection->title, 110)), ['crash-group/view', 'id' => $collection->id], ['class' => 'top-collection-title']) ?></li>
+                                <li>
+                                    <?= $collection->crashReportCount ?> reports (<?= $percent ?>%) in
+                                    <?= Html::a(Html::encode(MiscHelpers::addEllipsis($collection->title, 110)), ['crash-group/view', 'id' => $collection->id], ['class' => 'top-collection-title']) ?>
+                                    <?php if ($debugFunctionTitle !== ''): ?>
+                                        <span class="text-muted small">
+                                            function: <?= Html::encode(MiscHelpers::addEllipsis($debugFunctionTitle, 160)) ?>
+                                        </span>
+                                    <?php endif; ?>
+                                </li>
                             <?php endforeach; ?>
                         </ul>
                     <?php endif; ?>
